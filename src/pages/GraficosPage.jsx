@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   Building2,
   Calendar,
+  Download,
   Droplets,
   Eye,
   FileVideo,
@@ -51,7 +52,7 @@ export default function GraficosPage() {
           r.sede_id === selectedSedeId &&
           new Date(r.fecha_lectura).getTime() >= cutoff
       )
-      .sort((a, b) => new Date(a.fecha_lectura).getTime() - new Date(a.fecha_lectura).getTime());
+      .sort((a, b) => new Date(a.fecha_lectura).getTime() - new Date(b.fecha_lectura).getTime());
   }, [readings, selectedSedeId, daysFilter]);
 
   const luzMeters = useMemo(
@@ -114,6 +115,62 @@ export default function GraficosPage() {
     };
   }, [luzChartData, aguaChartData, sedeReadings]);
 
+  // Exportación CSV compatible directo con Excel (incluyendo columnas OBIS 1.8.1, 1.8.2, 1.6.1, 1.6.2.1)
+  const exportToExcelCsv = () => {
+    const obisKeySet = new Set(['1.8.1', '1.8.2', '1.6.1', '1.6.2.1']);
+    sedeReadings.forEach((r) => {
+      if (r.lecturas_obis) {
+        Object.keys(r.lecturas_obis).forEach((k) => obisKeySet.add(k));
+      }
+    });
+    const obisColumns = Array.from(obisKeySet);
+
+    const headers = [
+      'Fecha',
+      'Nombre',
+      'SEDE',
+      'Servicio',
+      ...obisColumns.map((k) => `Código ${k}`),
+      'Lectura Acumulada',
+      'Consumo Diario',
+      'Estado',
+      'Evidencia URL',
+    ];
+
+    const rows = [...sedeReadings].reverse().map((r) => {
+      const obis = r.lecturas_obis || {};
+      return [
+        new Date(r.fecha_lectura).toLocaleString('es-PE'),
+        r.usuario_nombre,
+        activeSede?.nombre || '',
+        r.tipo.toUpperCase(),
+        ...obisColumns.map((k) => (obis[k] !== undefined ? obis[k] : '')),
+        r.valor_lectura,
+        r.consumo_diario,
+        r.es_anomalo ? 'ANOMALO' : 'NORMAL',
+        r.media_url || '',
+      ];
+    });
+
+    const csvContent =
+      '\uFEFF' +
+      [headers, ...rows]
+        .map((row) =>
+          row
+            .map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`)
+            .join(';')
+        )
+        .join('\r\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `lecturas-${activeSede?.codigo || 'sede'}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
       {/* Cabecera y controles */}
@@ -127,7 +184,7 @@ export default function GraficosPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           <div className="inline-flex rounded-2xl bg-white border border-slate-200 p-1 shadow-2xs">
             {[
               { label: '7D', value: 7 },
@@ -150,7 +207,7 @@ export default function GraficosPage() {
           </div>
 
           {isSysadmin ? (
-            <div className="relative min-w-56">
+            <div className="relative min-w-52">
               <Building2 className="w-4 h-4 text-sky-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <select
                 value={selectedSedeId}
@@ -175,7 +232,7 @@ export default function GraficosPage() {
       </div>
 
       {/* Tarjetas KPI */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-5 shadow-xs">
           <div className="flex items-center justify-between text-amber-500 mb-2">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -183,12 +240,10 @@ export default function GraficosPage() {
             </span>
             <Zap className="w-4.5 h-4.5" />
           </div>
-          <p className="text-2xl font-mono font-extrabold text-slate-900">
+          <p className="text-xl sm:text-2xl font-mono font-extrabold text-slate-900">
             {stats.luzAvg} <span className="text-xs font-normal text-slate-500">kWh/día</span>
           </p>
-          <p className="text-xs text-slate-500 mt-1">
-            Acumulado periodo: {stats.luzTotal} kWh
-          </p>
+          <p className="text-xs text-slate-500 mt-1">Acumulado: {stats.luzTotal} kWh</p>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-5 shadow-xs">
@@ -198,23 +253,23 @@ export default function GraficosPage() {
             </span>
             <Droplets className="w-4.5 h-4.5" />
           </div>
-          <p className="text-2xl font-mono font-extrabold text-slate-900">
+          <p className="text-xl sm:text-2xl font-mono font-extrabold text-slate-900">
             {stats.aguaAvg} <span className="text-xs font-normal text-slate-500">m³/día</span>
           </p>
-          <p className="text-xs text-slate-500 mt-1">
-            Acumulado periodo: {stats.aguaTotal} m³
-          </p>
+          <p className="text-xs text-slate-500 mt-1">Acumulado: {stats.aguaTotal} m³</p>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-5 shadow-xs">
           <div className="flex items-center justify-between text-indigo-600 mb-2">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Lecturas Periodo
+              Lecturas
             </span>
             <Calendar className="w-4.5 h-4.5" />
           </div>
-          <p className="text-2xl font-mono font-extrabold text-slate-900">{sedeReadings.length}</p>
-          <p className="text-xs text-slate-500 mt-1">Registros verificados en sede</p>
+          <p className="text-xl sm:text-2xl font-mono font-extrabold text-slate-900">
+            {sedeReadings.length}
+          </p>
+          <p className="text-xs text-slate-500 mt-1">Registros en rango</p>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-5 shadow-xs">
@@ -224,29 +279,29 @@ export default function GraficosPage() {
             </span>
             <AlertTriangle className="w-4.5 h-4.5" />
           </div>
-          <p className="text-2xl font-mono font-extrabold text-slate-900">{stats.anomaliesCount}</p>
-          <p className="text-xs text-slate-500 mt-1">Excesos sobre límite o promedio</p>
+          <p className="text-xl sm:text-2xl font-mono font-extrabold text-slate-900">
+            {stats.anomaliesCount}
+          </p>
+          <p className="text-xs text-slate-500 mt-1">Excesos detectados</p>
         </div>
       </div>
 
-      {/* Gráficos de Consumo Diario: Luz y Agua */}
+      {/* Gráficos de Consumo Diario */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
-                <Zap className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-base">
-                  Consumo Diario de Luz (kWh/día)
-                </h3>
-                <p className="text-xs text-slate-500">
-                  {luzThreshold
-                    ? `Línea roja punteada = Umbral máx. (${luzThreshold} kWh/día)`
-                    : 'Evolución diaria registrada'}
-                </p>
-              </div>
+          <div className="flex items-center gap-2.5 mb-4">
+            <div className="p-2 rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
+              <Zap className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900 text-base">
+                Consumo Diario de Luz (kWh/día)
+              </h3>
+              <p className="text-xs text-slate-500">
+                {luzThreshold
+                  ? `Umbral máx: ${luzThreshold} kWh/día`
+                  : 'Evolución diaria registrada'}
+              </p>
             </div>
           </div>
 
@@ -273,7 +328,6 @@ export default function GraficosPage() {
                       borderColor: '#cbd5e1',
                       borderRadius: '14px',
                       color: '#0f172a',
-                      boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.1)',
                     }}
                     formatter={(val) => [`${val} kWh/día`, 'Consumo Diario']}
                   />
@@ -305,21 +359,19 @@ export default function GraficosPage() {
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-sky-50 text-sky-600 border border-sky-100">
-                <Droplets className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-base">
-                  Consumo Diario de Agua (m³/día)
-                </h3>
-                <p className="text-xs text-slate-500">
-                  {aguaThreshold
-                    ? `Línea roja punteada = Umbral máx. (${aguaThreshold} m³/día)`
-                    : 'Evolución diaria registrada'}
-                </p>
-              </div>
+          <div className="flex items-center gap-2.5 mb-4">
+            <div className="p-2 rounded-xl bg-sky-50 text-sky-600 border border-sky-100">
+              <Droplets className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900 text-base">
+                Consumo Diario de Agua (m³/día)
+              </h3>
+              <p className="text-xs text-slate-500">
+                {aguaThreshold
+                  ? `Umbral máx: ${aguaThreshold} m³/día`
+                  : 'Evolución diaria registrada'}
+              </p>
             </div>
           </div>
 
@@ -346,7 +398,6 @@ export default function GraficosPage() {
                       borderColor: '#cbd5e1',
                       borderRadius: '14px',
                       color: '#0f172a',
-                      boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.1)',
                     }}
                     formatter={(val) => [`${val} m³/día`, 'Consumo Diario']}
                   />
@@ -378,18 +429,29 @@ export default function GraficosPage() {
         </div>
       </div>
 
-      {/* Bitácora detallada de la sede */}
+      {/* Bitácora detallada con códigos OBIS y exportación a Excel */}
       <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs">
-        <h3 className="font-bold text-slate-900 text-base mb-4">
-          Bitácora de Lecturas y Evidencias ({activeSede?.nombre})
-        </h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <h3 className="font-bold text-slate-900 text-base">
+            Bitácora de Lecturas y Códigos OBIS ({activeSede?.nombre})
+          </h3>
+          {sedeReadings.length > 0 && (
+            <button
+              onClick={exportToExcelCsv}
+              className="self-start px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-xs font-bold text-emerald-800 flex items-center gap-1.5 cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" /> Exportar Excel (.CSV)
+            </button>
+          )}
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-xs uppercase text-slate-500">
                 <th className="py-3 pr-4">Fecha</th>
                 <th className="py-3 px-3">Servicio</th>
-                <th className="py-3 px-3">Lectura</th>
+                <th className="py-3 px-3">Lectura / Códigos OBIS</th>
                 <th className="py-3 px-3">Consumo Diario</th>
                 <th className="py-3 px-3">Operador</th>
                 <th className="py-3 px-3">Estado</th>
@@ -397,8 +459,9 @@ export default function GraficosPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {[...sedeReadings].reverse().slice(0, 25).map((r) => {
+              {[...sedeReadings].reverse().slice(0, 30).map((r) => {
                 const unit = r.tipo === 'luz' ? 'kWh' : 'm³';
+                const obisEntries = r.lecturas_obis ? Object.entries(r.lecturas_obis) : [];
                 return (
                   <tr key={r.id} className="hover:bg-slate-50">
                     <td className="py-3 pr-4 text-xs text-slate-600 whitespace-nowrap">
@@ -421,8 +484,22 @@ export default function GraficosPage() {
                         {r.tipo === 'luz' ? 'Luz' : 'Agua'}
                       </span>
                     </td>
-                    <td className="py-3 px-3 font-mono font-bold text-slate-900 whitespace-nowrap">
-                      {r.valor_lectura} {unit}
+                    <td className="py-3 px-3">
+                      <div className="font-mono font-bold text-slate-900 whitespace-nowrap">
+                        {r.valor_lectura} {unit}
+                      </div>
+                      {obisEntries.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {obisEntries.map(([code, val]) => (
+                            <span
+                              key={code}
+                              className="px-1.5 py-0.2 rounded bg-slate-100 border border-slate-200 text-[10px] font-mono text-slate-700"
+                            >
+                              {code}: <strong>{val}</strong>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className="py-3 px-3 font-mono text-slate-700 whitespace-nowrap">
                       {r.consumo_diario} {unit}/d

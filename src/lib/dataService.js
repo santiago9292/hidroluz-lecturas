@@ -1,5 +1,12 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { evaluateReadingConsumption, sanitizeDni } from './consumption';
+import {
+  DEFAULT_TRIFASICO_CODES,
+  encodeMeterSerieFallback,
+  encodeReadingObsFallback,
+  normalizeMeterObis,
+  normalizeReadingObis,
+} from './obis';
 import { loadDemoDb, saveDemoDb, subscribeDemoRealtime } from './demoData';
 import { triggerNativeAlertNotification } from './pushClient';
 
@@ -17,6 +24,18 @@ function fileToDataUrl(file) {
     reader.onerror = (e) => reject(e);
     reader.readAsDataURL(file);
   });
+}
+
+function isMissingColumnError(error) {
+  if (!error) return false;
+  const msg = String(error.message || '');
+  return (
+    error.code === 'PGRST204' ||
+    error.code === '42703' ||
+    msg.includes('es_trifasico') ||
+    msg.includes('codigos_obis') ||
+    msg.includes('lecturas_obis')
+  );
 }
 
 /**
@@ -50,7 +69,6 @@ export async function loginWithDni(rawDni) {
     return user;
   }
 
-  // Modo Demo Interactivo
   const db = loadDemoDb();
   const found = db.users.find((u) => u.dni === dni);
   if (!found) {
@@ -106,12 +124,11 @@ export async function fetchAllAppData(currentUser) {
 
     const results = await Promise.all(promises);
     const sedes = results[0].data || [];
-    const meters = results[1].data || [];
-    const readings = results[2].data || [];
+    const meters = (results[1].data || []).map(normalizeMeterObis);
+    const readings = (results[2].data || []).map(normalizeReadingObis);
     const alerts = results[3].data || [];
     const users = isSysadmin ? results[4].data || [] : [];
 
-    // Revalidar perfil actual por si cambió su sede o estado
     let updatedUser = currentUser;
     const { data: freshProfile } = await supabase
       .from('users_app')
@@ -123,7 +140,6 @@ export async function fetchAllAppData(currentUser) {
     return { sedes, meters, readings, alerts, users, updatedUser };
   }
 
-  // Modo Demo
   const db = loadDemoDb();
   const freshLocal = db.users.find((u) => u.id === currentUser.id) || currentUser;
   const updatedUser = {
@@ -134,14 +150,18 @@ export async function fetchAllAppData(currentUser) {
   const sedes = isSysadmin
     ? db.sedes
     : db.sedes.filter((s) => s.id === updatedUser.sede_id);
-  const meters = isSysadmin
-    ? db.meters
-    : db.meters.filter((m) => m.sede_id === updatedUser.sede_id);
+  const meters = (
+    isSysadmin
+      ? db.meters
+      : db.meters.filter((m) => m.sede_id === updatedUser.sede_id)
+  ).map(normalizeMeterObis);
   const readings = (
     isSysadmin
       ? db.readings
       : db.readings.filter((r) => r.sede_id === updatedUser.sede_id)
-  ).sort((a, b) => new Date(b.fecha_lectura).getTime() - new Date(a.fecha_lectura).getTime());
+  )
+    .map(normalizeReadingObis)
+    .sort((a, b) => new Date(b.fecha_lectura).getTime() - new Date(a.fecha_lectura).getTime());
 
   const alerts = (
     isSysadmin
@@ -193,7 +213,6 @@ export async function uploadMeterMedia({ file, sedeId, meterId }) {
     };
   }
 
-  // Modo Demo: convertir fotos ligeras a DataURL persistente o usar ObjectURL para videos grandes
   if (!isVideo && file.size <= 3 * 1024 * 1024) {
     const dataUrl = await fileToDataUrl(file);
     return { mediaUrl: dataUrl, mediaPath: null, mediaTipo };
@@ -203,13 +222,14 @@ export async function uploadMeterMedia({ file, sedeId, meterId }) {
 }
 
 /**
- * 4. REGISTRAR LECTURA + CÁLCULO DIARIO + DISPARO AUTOMÁTICO DE ALERTA Y WEB PUSH
+ * 4. REGISTRAR LECTURA (SOPORTA MONOFÁSICO, AGUA Y TRIFÁSICO OBIS)
  */
 export async function registerMeterReading({
   currentUser,
   sede,
   meter,
   valorLectura,
+  obisValues = null,
   fechaLectura,
   observaciones,
   file,
@@ -220,14 +240,33 @@ export async function registerMeterReading({
     throw new Error('Solo puedes registrar lecturas correspondientes a tu propia sede.');
   }
 
-  const numVal = Number(valorLectura);
-  if (Number.isNaN(numVal) || numVal < 0) {
-    throw new Error('Ingresa un valor numérico válido mayor o igual a 0.');
+  const isTrifasico = Boolean(meter.es_trifasico && meter.tipo === 'luz');
+  let sanitizedObis = null;
+
+  if (isTrifasico) {
+    const codes = meter.codigos_obis || DEFAULT_TRIFASICO_CODES;
+    sanitizedObis = {};
+    for (const c of codes) {
+      const raw = obisValues?.[c.code];
+      if (raw === '' || raw === undefined || raw === null || Number.isNaN(Number(raw))) {
+        throw new Error(`Ingresa un valor válido para el Código ${c.code}.`);
+      }
+      if (Number(raw) < 0) {
+        throw new Error(`El Código ${c.code} no puede ser negativo.`);
+      }
+      sanitizedObis[c.code] = Number(raw);
+    }
+  } else {
+    const numVal = Number(valorLectura);
+    if (valorLectura === '' || Number.isNaN(numVal) || numVal < 0) {
+      throw new Error('Ingresa un valor numérico válido mayor o igual a 0.');
+    }
   }
 
   const isoDate = fechaLectura ? new Date(fechaLectura).toISOString() : new Date().toISOString();
   const evalResult = evaluateReadingConsumption({
-    valorLectura: numVal,
+    valorLectura: Number(valorLectura || 0),
+    obisValues: sanitizedObis,
     fechaLectura: isoDate,
     meter,
     previousReadings,
@@ -239,14 +278,14 @@ export async function registerMeterReading({
     meterId: meter.id,
   });
 
-  const readingPayload = {
+  const baseReadingPayload = {
     sede_id: sede.id,
     meter_id: meter.id,
     user_id: currentUser.id,
     usuario_nombre: currentUser.nombre_completo,
     usuario_dni: currentUser.dni,
     tipo: meter.tipo,
-    valor_lectura: numVal,
+    valor_lectura: evalResult.valorCalculado,
     lectura_anterior: evalResult.lecturaAnterior,
     dias_transcurridos: evalResult.diasTranscurridos,
     consumo_total_periodo: evalResult.consumoTotalPeriodo,
@@ -265,16 +304,31 @@ export async function registerMeterReading({
   let createdAlert = null;
 
   if (isSupabaseConfigured) {
-    const { data: inserted, error } = await supabase
+    const payloadWithJsonb = sanitizedObis
+      ? { ...baseReadingPayload, lecturas_obis: sanitizedObis }
+      : baseReadingPayload;
+
+    let { data: inserted, error } = await supabase
       .from('readings')
-      .insert(readingPayload)
+      .insert(payloadWithJsonb)
       .select('*')
       .single();
+
+    // Respaldo automático transparente si aún no se ejecutó 003_trifasico_support.sql
+    if (error && sanitizedObis && isMissingColumnError(error)) {
+      const fallbackPayload = {
+        ...baseReadingPayload,
+        observaciones: encodeReadingObsFallback(observaciones, sanitizedObis),
+      };
+      const retry = await supabase.from('readings').insert(fallbackPayload).select('*').single();
+      inserted = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       throw new Error(error.message);
     }
-    savedReading = inserted;
+    savedReading = normalizeReadingObis(inserted);
 
     if (evalResult.esAnomalo && evalResult.tipoAlerta) {
       const alertTitle =
@@ -303,7 +357,8 @@ export async function registerMeterReading({
     const db = loadDemoDb();
     savedReading = {
       id: uid('read'),
-      ...readingPayload,
+      ...baseReadingPayload,
+      lecturas_obis: sanitizedObis,
       created_at: new Date().toISOString(),
     };
     db.readings.unshift(savedReading);
@@ -334,7 +389,6 @@ export async function registerMeterReading({
     saveDemoDb(db, true);
   }
 
-  // Si hubo anomalía o consumo excesivo, disparar Notificación Nativa Web Push
   if (createdAlert) {
     triggerNativeAlertNotification({
       title: `⚠️ ${createdAlert.titulo}`,
@@ -370,7 +424,7 @@ export async function markAlertResolved(alertId, userId) {
 }
 
 /**
- * 6. SYSADMIN — CRUD DE SEDES Y MEDIDORES
+ * 6. SYSADMIN — CRUD DE SEDES Y MEDIDORES (CON SOPORTE TRIFÁSICO OBIS)
  */
 export async function saveSedeAdmin({
   id = null,
@@ -381,6 +435,7 @@ export async function saveSedeAdmin({
   activa = true,
   umbralLuz = 180,
   umbralAgua = 25,
+  luzTrifasico = false,
 }) {
   const cleanCode = codigo.trim().toUpperCase();
   if (!nombre.trim() || !cleanCode) {
@@ -419,34 +474,34 @@ export async function saveSedeAdmin({
 
     if (error) throw new Error(error.message);
 
-    // Crear automáticamente 1 medidor de Luz y 1 medidor de Agua por defecto
-    await supabase.from('meters').insert([
-      {
-        sede_id: createdSede.id,
-        tipo: 'luz',
-        nombre: 'Medidor Principal Luz',
-        numero_serie: `LUZ-${cleanCode}`,
-        unidad: 'kWh',
-        umbral_diario_max: umbralLuz ? Number(umbralLuz) : null,
-        porcentaje_alerta_promedio: 30,
-        activo: true,
-      },
-      {
-        sede_id: createdSede.id,
-        tipo: 'agua',
-        nombre: 'Medidor Principal Agua',
-        numero_serie: `AGUA-${cleanCode}`,
-        unidad: 'm3',
-        umbral_diario_max: umbralAgua ? Number(umbralAgua) : null,
-        porcentaje_alerta_promedio: 30,
-        activo: true,
-      },
-    ]);
+    // Crear medidor de Luz (Monofásico o Trifásico) y Agua
+    await saveMeterAdmin({
+      sede_id: createdSede.id,
+      tipo: 'luz',
+      nombre: luzTrifasico ? 'Medidor Trifásico Luz' : 'Medidor Principal Luz',
+      numero_serie: `LUZ-${cleanCode}`,
+      umbral_diario_max: umbralLuz ? Number(umbralLuz) : null,
+      porcentaje_alerta_promedio: 30,
+      es_trifasico: Boolean(luzTrifasico),
+      codigos_obis: luzTrifasico ? DEFAULT_TRIFASICO_CODES : null,
+      activo: true,
+    });
+
+    await saveMeterAdmin({
+      sede_id: createdSede.id,
+      tipo: 'agua',
+      nombre: 'Medidor Principal Agua',
+      numero_serie: `AGUA-${cleanCode}`,
+      umbral_diario_max: umbralAgua ? Number(umbralAgua) : null,
+      porcentaje_alerta_promedio: 30,
+      es_trifasico: false,
+      codigos_obis: null,
+      activo: true,
+    });
 
     return createdSede;
   }
 
-  // Modo Demo
   const db = loadDemoDb();
   if (id) {
     db.sedes = db.sedes.map((s) =>
@@ -484,11 +539,13 @@ export async function saveSedeAdmin({
       id: uid('meter'),
       sede_id: newSede.id,
       tipo: 'luz',
-      nombre: 'Medidor Principal Luz',
+      nombre: luzTrifasico ? 'Medidor Trifásico Luz' : 'Medidor Principal Luz',
       numero_serie: `LUZ-${cleanCode}`,
       unidad: 'kWh',
       umbral_diario_max: umbralLuz ? Number(umbralLuz) : null,
       porcentaje_alerta_promedio: 30,
+      es_trifasico: Boolean(luzTrifasico),
+      codigos_obis: luzTrifasico ? DEFAULT_TRIFASICO_CODES : null,
       activo: true,
       created_at: new Date().toISOString(),
     },
@@ -501,6 +558,8 @@ export async function saveSedeAdmin({
       unidad: 'm3',
       umbral_diario_max: umbralAgua ? Number(umbralAgua) : null,
       porcentaje_alerta_promedio: 30,
+      es_trifasico: false,
+      codigos_obis: null,
       activo: true,
       created_at: new Date().toISOString(),
     }
@@ -532,10 +591,19 @@ export async function saveMeterAdmin({
   numero_serie,
   umbral_diario_max,
   porcentaje_alerta_promedio = 30,
+  es_trifasico = false,
+  codigos_obis = null,
   activo = true,
 }) {
   const unidad = tipo === 'luz' ? 'kWh' : 'm3';
-  const payload = {
+  const useTrifasico = tipo === 'luz' && Boolean(es_trifasico);
+  const activeObis = useTrifasico
+    ? Array.isArray(codigos_obis) && codigos_obis.length > 0
+      ? codigos_obis.filter((c) => c.code?.trim())
+      : DEFAULT_TRIFASICO_CODES
+    : null;
+
+  const basePayload = {
     sede_id,
     tipo,
     nombre: nombre.trim(),
@@ -550,21 +618,45 @@ export async function saveMeterAdmin({
   };
 
   if (isSupabaseConfigured) {
+    const jsonbPayload = {
+      ...basePayload,
+      es_trifasico: useTrifasico,
+      codigos_obis: activeObis,
+    };
+
     if (id) {
-      const { error } = await supabase.from('meters').update(payload).eq('id', id);
+      let { error } = await supabase.from('meters').update(jsonbPayload).eq('id', id);
+      if (error && isMissingColumnError(error)) {
+        const fallback = {
+          ...basePayload,
+          numero_serie: encodeMeterSerieFallback(numero_serie, useTrifasico, activeObis),
+        };
+        const retry = await supabase.from('meters').update(fallback).eq('id', id);
+        error = retry.error;
+      }
       if (error) throw new Error(error.message);
       return;
     }
-    const { error } = await supabase.from('meters').insert(payload);
+
+    let { error } = await supabase.from('meters').insert(jsonbPayload);
+    if (error && isMissingColumnError(error)) {
+      const fallback = {
+        ...basePayload,
+        numero_serie: encodeMeterSerieFallback(numero_serie, useTrifasico, activeObis),
+      };
+      const retry = await supabase.from('meters').insert(fallback);
+      error = retry.error;
+    }
     if (error) throw new Error(error.message);
     return;
   }
 
   const db = loadDemoDb();
+  const fullLocal = { ...basePayload, es_trifasico: useTrifasico, codigos_obis: activeObis };
   if (id) {
-    db.meters = db.meters.map((m) => (m.id === id ? { ...m, ...payload } : m));
+    db.meters = db.meters.map((m) => (m.id === id ? { ...m, ...fullLocal } : m));
   } else {
-    db.meters.push({ id: uid('meter'), ...payload, created_at: new Date().toISOString() });
+    db.meters.push({ id: uid('meter'), ...fullLocal, created_at: new Date().toISOString() });
   }
   saveDemoDb(db, true);
 }
@@ -583,7 +675,7 @@ export async function deleteMeterAdmin(meterId) {
 }
 
 /**
- * 7. SYSADMIN — CRUD DE USUARIOS (CON DNI Y ASIGNACIÓN DE SEDE)
+ * 7. SYSADMIN — CRUD DE USUARIOS
  */
 export async function saveUserAdmin({
   id = null,
@@ -663,7 +755,7 @@ export async function deleteUserAdmin(targetUserId, currentUserId) {
 }
 
 /**
- * 8. SUSCRIPCIÓN EN TIEMPO REAL (SUPABASE REALTIME + DEMO BROADCAST)
+ * 8. SUSCRIPCIÓN EN TIEMPO REAL
  */
 export function subscribeToRealtimeChanges({ currentUser, onSync, onRemoteAlert }) {
   if (!currentUser) return () => {};

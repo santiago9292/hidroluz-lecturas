@@ -112,7 +112,6 @@ export default function AppShell({ children }) {
           </div>
         </div>
 
-        {/* Tarjeta de usuario en sesión */}
         <div className="p-4 mx-3 mt-4 rounded-2xl bg-slate-50 border border-slate-200/80">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200">
@@ -133,7 +132,6 @@ export default function AppShell({ children }) {
           </p>
         </div>
 
-        {/* Navegación principal */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -163,7 +161,6 @@ export default function AppShell({ children }) {
           })}
         </nav>
 
-        {/* Acciones rápidas PWA + Alertas Nativas + Salir */}
         <div className="p-3 border-t border-slate-200 space-y-2">
           {pushState.permission !== 'granted' ? (
             <button
@@ -200,17 +197,19 @@ export default function AppShell({ children }) {
         </div>
       </aside>
 
-      {/* CABECERA MÓVIL Y TABLET */}
-      <header className="lg:hidden sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="h-9 w-9 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0">
-            <Zap className="w-4 h-4 text-amber-500" />
-            <Droplets className="w-4 h-4 text-sky-600 -ml-1" />
+      {/* CABECERA MÓVIL ULTRA COMPACTA */}
+      <header className="lg:hidden sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 px-3 py-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="h-8 w-8 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0">
+            <Zap className="w-3.5 h-3.5 text-amber-500" />
+            <Droplets className="w-3.5 h-3.5 text-sky-600 -ml-1" />
           </div>
           <div className="min-w-0">
-            <p className="font-bold text-sm text-slate-900 leading-tight truncate">HidroLuz</p>
+            <p className="font-extrabold text-xs text-slate-900 leading-tight truncate">
+              HidroLuz Control
+            </p>
             <p className="text-[11px] text-slate-500 truncate">
-              {isSysadmin ? 'Sysadmin' : assignedSede?.nombre || currentUser?.nombre_completo}
+              {currentUser?.nombre_completo}
             </p>
           </div>
         </div>
@@ -220,7 +219,7 @@ export default function AppShell({ children }) {
             <button
               onClick={handleEnablePush}
               title="Activar alertas nativas"
-              className="p-2 rounded-xl bg-amber-50 text-amber-700 border border-amber-200"
+              className="p-1.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-200"
             >
               <Bell className="w-4 h-4" />
             </button>
@@ -230,7 +229,7 @@ export default function AppShell({ children }) {
             <button
               onClick={promptInstallApp}
               title="Instalar aplicación"
-              className="p-2 rounded-xl bg-sky-50 text-sky-700 border border-sky-200"
+              className="p-1.5 rounded-xl bg-sky-50 text-sky-700 border border-sky-200"
             >
               <Download className="w-4 h-4" />
             </button>
@@ -239,7 +238,7 @@ export default function AppShell({ children }) {
           <button
             onClick={handleLogout}
             title="Cerrar sesión"
-            className="p-2 rounded-xl bg-slate-100 text-slate-600 border border-slate-200"
+            className="p-1.5 rounded-xl bg-slate-100 text-slate-600 border border-slate-200"
           >
             <LogOut className="w-4 h-4" />
           </button>
@@ -247,31 +246,21 @@ export default function AppShell({ children }) {
       </header>
 
       {/* CONTENIDO PRINCIPAL */}
-      <main className="flex-1 lg:pl-68 pb-24 lg:pb-10">
+      <main className="flex-1 lg:pl-68 pb-20 lg:pb-10">
         {mode === 'demo' && (
-          <div className="bg-indigo-50 border-b border-indigo-200 px-4 py-2 text-xs text-indigo-900 flex flex-wrap items-center justify-between gap-2">
-            <span className="flex items-center gap-2">
-              <Activity className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-              <span>
-                <strong>Modo Demo Interactivo:</strong> Configura{' '}
-                <code className="px-1 py-0.5 rounded bg-white border border-indigo-200 text-indigo-700">
-                  VITE_SUPABASE_URL
-                </code>{' '}
-                y{' '}
-                <code className="px-1 py-0.5 rounded bg-white border border-indigo-200 text-indigo-700">
-                  VITE_SUPABASE_ANON_KEY
-                </code>{' '}
-                para conectar tu base de datos en Supabase.
-              </span>
+          <div className="bg-indigo-50 border-b border-indigo-200 px-3 py-1.5 text-[11px] text-indigo-900 flex items-center gap-2">
+            <Activity className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+            <span className="truncate">
+              <strong>Modo Demo:</strong> Conectado localmente.
             </span>
           </div>
         )}
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">{children}</div>
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6">{children}</div>
       </main>
 
       {/* BARRA DE NAVEGACIÓN INFERIOR EN MÓVIL */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-1.5 flex items-center justify-around safe-area-bottom shadow-lg">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 px-1.5 py-1 flex items-center justify-around safe-area-bottom shadow-lg">
         {navItems.map((item) => {
           const Icon = item.icon;
           return (
@@ -279,15 +268,15 @@ export default function AppShell({ children }) {
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
-                `relative flex flex-col items-center justify-center py-1.5 px-2.5 rounded-xl text-[11px] font-semibold transition ${
+                `relative flex flex-col items-center justify-center py-1 px-2.5 rounded-xl text-[10px] font-bold transition ${
                   isActive ? 'text-sky-700 bg-sky-50' : 'text-slate-500 hover:text-slate-900'
                 }`
               }
             >
-              <Icon className="w-5 h-5 mb-0.5" />
+              <Icon className="w-4.5 h-4.5 mb-0.5" />
               <span className="truncate max-w-[68px]">{item.label.split(' ')[0]}</span>
               {item.badge > 0 && (
-                <span className="absolute top-1 right-2 h-4 min-w-4 px-1 rounded-full bg-rose-600 text-[10px] font-bold text-white flex items-center justify-center">
+                <span className="absolute top-0.5 right-1.5 h-4 min-w-4 px-1 rounded-full bg-rose-600 text-[10px] font-bold text-white flex items-center justify-center">
                   {item.badge}
                 </span>
               )}
@@ -296,11 +285,11 @@ export default function AppShell({ children }) {
         })}
       </nav>
 
-      {/* TOAST FLOTANTE DE NOTIFICACIONES EN VIVO */}
+      {/* TOAST COMPACTO QUE NO TAPA LA CABECERA MÓVIL */}
       {toast && (
-        <div className="fixed top-4 right-4 left-4 sm:left-auto sm:w-96 z-50 animate-in fade-in slide-in-from-top-2">
+        <div className="fixed top-14 lg:top-4 right-3 left-3 sm:left-auto sm:w-96 z-50 animate-in fade-in slide-in-from-top-2">
           <div
-            className={`rounded-2xl p-4 shadow-xl border flex items-start justify-between gap-3 ${
+            className={`rounded-2xl px-3.5 py-2.5 sm:p-4 shadow-lg border flex items-center justify-between gap-2.5 ${
               toast.type === 'error'
                 ? 'bg-rose-50 border-rose-300 text-rose-900'
                 : toast.type === 'warning'
@@ -310,7 +299,7 @@ export default function AppShell({ children }) {
                 : 'bg-white border-slate-200 text-slate-900'
             }`}
           >
-            <p className="text-sm leading-snug font-semibold">{toast.message}</p>
+            <p className="text-xs sm:text-sm leading-snug font-semibold">{toast.message}</p>
             <button
               onClick={() => setToast(null)}
               className="text-slate-400 hover:text-slate-700 shrink-0 cursor-pointer"
@@ -321,7 +310,7 @@ export default function AppShell({ children }) {
         </div>
       )}
 
-      {/* GUÍA INTERACTIVA DE INSTALACIÓN NATIVA PARA iOS (iPhone / iPad) */}
+      {/* GUÍA INTERACTIVA DE INSTALACIÓN NATIVA PARA iOS */}
       {showIosInstallGuide && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-4">
           <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
