@@ -1,0 +1,26 @@
+{
+  "name": "HidroLuz Control — Lecturas de Luz y Agua",
+  "short_name": "HidroLuz",
+  "description": "Control multisede en tiempo real de lecturas de medidores de luz y agua con alertas nativas y evidencia multimedia.",
+  "start_url": "/registro",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#090d16",
+  "theme_color": "#0f172a",
+  "categories": ["utilities", "productivity", "business"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

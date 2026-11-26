@@ -1,0 +1,19 @@
+# dependencias
+node_modules/
+
+# build de produccion Vite
+dist/
+dist-ssr/
+*.local
+
+# variables de entorno (se conserva .env.example para GitHub)
+.env
+.env.*
+!.env.example
+
+# vercel y sistema
+.vercel
+.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
