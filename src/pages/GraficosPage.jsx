@@ -51,7 +51,7 @@ export default function GraficosPage() {
           r.sede_id === selectedSedeId &&
           new Date(r.fecha_lectura).getTime() >= cutoff
       )
-      .sort((a, b) => new Date(a.fecha_lectura).getTime() - new Date(b.fecha_lectura).getTime());
+      .sort((a, b) => new Date(a.fecha_lectura).getTime() - new Date(a.fecha_lectura).getTime());
   }, [readings, selectedSedeId, daysFilter]);
 
   const luzMeters = useMemo(
@@ -119,17 +119,16 @@ export default function GraficosPage() {
       {/* Cabecera y controles */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-extrabold text-white tracking-tight">
+          <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">
             Gráficos de Consumo por Sede
           </h2>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-slate-500">
             Monitoreo en tiempo real del consumo diario de energía eléctrica y agua potable.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* Rango de días */}
-          <div className="inline-flex rounded-2xl bg-slate-900 border border-slate-800 p-1">
+          <div className="inline-flex rounded-2xl bg-white border border-slate-200 p-1 shadow-2xs">
             {[
               { label: '7D', value: 7 },
               { label: '14D', value: 14 },
@@ -139,10 +138,10 @@ export default function GraficosPage() {
               <button
                 key={opt.value}
                 onClick={() => setDaysFilter(opt.value)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
                   daysFilter === opt.value
-                    ? 'bg-sky-500 text-slate-950'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-sky-600 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 {opt.label}
@@ -150,14 +149,13 @@ export default function GraficosPage() {
             ))}
           </div>
 
-          {/* Selector de sede */}
           {isSysadmin ? (
             <div className="relative min-w-56">
-              <Building2 className="w-4 h-4 text-sky-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Building2 className="w-4 h-4 text-sky-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <select
                 value={selectedSedeId}
                 onChange={(e) => setSelectedSedeId(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 rounded-2xl bg-slate-900 border border-slate-700 text-sm font-semibold text-white outline-none focus:border-sky-400"
+                className="w-full pl-10 pr-4 py-2 rounded-2xl bg-white border border-slate-300 shadow-2xs text-sm font-semibold text-slate-900 outline-none focus:border-sky-500"
               >
                 {sedes.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -167,10 +165,10 @@ export default function GraficosPage() {
               </select>
             </div>
           ) : (
-            <div className="px-4 py-2 rounded-2xl bg-slate-900 border border-slate-800 flex items-center gap-2 text-sm font-semibold text-white">
-              <Building2 className="w-4 h-4 text-sky-400" />
+            <div className="px-4 py-2 rounded-2xl bg-white border border-slate-200 shadow-2xs flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <Building2 className="w-4 h-4 text-sky-600" />
               <span>{activeSede?.nombre}</span>
-              <Lock className="w-3.5 h-3.5 text-slate-500 ml-1" />
+              <Lock className="w-3.5 h-3.5 text-slate-400 ml-1" />
             </div>
           )}
         </div>
@@ -178,71 +176,72 @@ export default function GraficosPage() {
 
       {/* Tarjetas KPI */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-4 sm:p-5">
-          <div className="flex items-center justify-between text-amber-400 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+        <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-5 shadow-xs">
+          <div className="flex items-center justify-between text-amber-500 mb-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
               Promedio Luz
             </span>
             <Zap className="w-4.5 h-4.5" />
           </div>
-          <p className="text-2xl font-mono font-extrabold text-white">
-            {stats.luzAvg} <span className="text-xs font-normal text-slate-400">kWh/día</span>
+          <p className="text-2xl font-mono font-extrabold text-slate-900">
+            {stats.luzAvg} <span className="text-xs font-normal text-slate-500">kWh/día</span>
           </p>
           <p className="text-xs text-slate-500 mt-1">
             Acumulado periodo: {stats.luzTotal} kWh
           </p>
         </div>
 
-        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-4 sm:p-5">
-          <div className="flex items-center justify-between text-sky-400 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+        <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-5 shadow-xs">
+          <div className="flex items-center justify-between text-sky-600 mb-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
               Promedio Agua
             </span>
             <Droplets className="w-4.5 h-4.5" />
           </div>
-          <p className="text-2xl font-mono font-extrabold text-white">
-            {stats.aguaAvg} <span className="text-xs font-normal text-slate-400">m³/día</span>
+          <p className="text-2xl font-mono font-extrabold text-slate-900">
+            {stats.aguaAvg} <span className="text-xs font-normal text-slate-500">m³/día</span>
           </p>
           <p className="text-xs text-slate-500 mt-1">
             Acumulado periodo: {stats.aguaTotal} m³
           </p>
         </div>
 
-        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-4 sm:p-5">
-          <div className="flex items-center justify-between text-indigo-400 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+        <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-5 shadow-xs">
+          <div className="flex items-center justify-between text-indigo-600 mb-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
               Lecturas Periodo
             </span>
             <Calendar className="w-4.5 h-4.5" />
           </div>
-          <p className="text-2xl font-mono font-extrabold text-white">{sedeReadings.length}</p>
+          <p className="text-2xl font-mono font-extrabold text-slate-900">{sedeReadings.length}</p>
           <p className="text-xs text-slate-500 mt-1">Registros verificados en sede</p>
         </div>
 
-        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-4 sm:p-5">
-          <div className="flex items-center justify-between text-rose-400 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+        <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-5 shadow-xs">
+          <div className="flex items-center justify-between text-rose-600 mb-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
               Anomalías
             </span>
             <AlertTriangle className="w-4.5 h-4.5" />
           </div>
-          <p className="text-2xl font-mono font-extrabold text-white">{stats.anomaliesCount}</p>
+          <p className="text-2xl font-mono font-extrabold text-slate-900">{stats.anomaliesCount}</p>
           <p className="text-xs text-slate-500 mt-1">Excesos sobre límite o promedio</p>
         </div>
       </div>
 
       {/* Gráficos de Consumo Diario: Luz y Agua */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Gráfico de Luz */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-5 sm:p-6">
+        <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-amber-500/15 text-amber-300">
+              <div className="p-2 rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
                 <Zap className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-bold text-white text-base">Consumo Diario de Luz (kWh/día)</h3>
-                <p className="text-xs text-slate-400">
+                <h3 className="font-bold text-slate-900 text-base">
+                  Consumo Diario de Luz (kWh/día)
+                </h3>
+                <p className="text-xs text-slate-500">
                   {luzThreshold
                     ? `Línea roja punteada = Umbral máx. (${luzThreshold} kWh/día)`
                     : 'Evolución diaria registrada'}
@@ -253,7 +252,7 @@ export default function GraficosPage() {
 
           <div className="h-72 w-full">
             {luzChartData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-sm text-slate-500">
+              <div className="h-full flex items-center justify-center text-sm text-slate-400">
                 Registra al menos 2 lecturas de luz para graficar el consumo diario.
               </div>
             ) : (
@@ -261,30 +260,31 @@ export default function GraficosPage() {
                 <AreaChart data={luzChartData} margin={{ top: 10, right: 12, left: -12, bottom: 0 }}>
                   <defs>
                     <linearGradient id="luzGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.45} />
+                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.32} />
                       <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="fecha" stroke="#64748b" fontSize={12} />
                   <YAxis stroke="#64748b" fontSize={12} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: '#0f172a',
-                      borderColor: '#334155',
+                      backgroundColor: '#ffffff',
+                      borderColor: '#cbd5e1',
                       borderRadius: '14px',
-                      color: '#f8fafc',
+                      color: '#0f172a',
+                      boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.1)',
                     }}
                     formatter={(val) => [`${val} kWh/día`, 'Consumo Diario']}
                   />
                   {luzThreshold && (
                     <ReferenceLine
                       y={luzThreshold}
-                      stroke="#f43f5e"
+                      stroke="#e11d48"
                       strokeDasharray="5 5"
                       label={{
                         value: `Máx ${luzThreshold}`,
-                        fill: '#fb7185',
+                        fill: '#e11d48',
                         fontSize: 11,
                         position: 'insideTopRight',
                       }}
@@ -293,7 +293,7 @@ export default function GraficosPage() {
                   <Area
                     type="monotone"
                     dataKey="consumoDiario"
-                    stroke="#facc15"
+                    stroke="#d97706"
                     strokeWidth={2.5}
                     fill="url(#luzGrad)"
                     activeDot={{ r: 6 }}
@@ -304,16 +304,17 @@ export default function GraficosPage() {
           </div>
         </div>
 
-        {/* Gráfico de Agua */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-5 sm:p-6">
+        <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-sky-500/15 text-sky-300">
+              <div className="p-2 rounded-xl bg-sky-50 text-sky-600 border border-sky-100">
                 <Droplets className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-bold text-white text-base">Consumo Diario de Agua (m³/día)</h3>
-                <p className="text-xs text-slate-400">
+                <h3 className="font-bold text-slate-900 text-base">
+                  Consumo Diario de Agua (m³/día)
+                </h3>
+                <p className="text-xs text-slate-500">
                   {aguaThreshold
                     ? `Línea roja punteada = Umbral máx. (${aguaThreshold} m³/día)`
                     : 'Evolución diaria registrada'}
@@ -324,7 +325,7 @@ export default function GraficosPage() {
 
           <div className="h-72 w-full">
             {aguaChartData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-sm text-slate-500">
+              <div className="h-full flex items-center justify-center text-sm text-slate-400">
                 Registra al menos 2 lecturas de agua para graficar el consumo diario.
               </div>
             ) : (
@@ -332,30 +333,31 @@ export default function GraficosPage() {
                 <AreaChart data={aguaChartData} margin={{ top: 10, right: 12, left: -12, bottom: 0 }}>
                   <defs>
                     <linearGradient id="aguaGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.45} />
-                      <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0.02} />
+                      <stop offset="5%" stopColor="#0284c7" stopOpacity={0.32} />
+                      <stop offset="95%" stopColor="#0284c7" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="fecha" stroke="#64748b" fontSize={12} />
                   <YAxis stroke="#64748b" fontSize={12} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: '#0f172a',
-                      borderColor: '#334155',
+                      backgroundColor: '#ffffff',
+                      borderColor: '#cbd5e1',
                       borderRadius: '14px',
-                      color: '#f8fafc',
+                      color: '#0f172a',
+                      boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.1)',
                     }}
                     formatter={(val) => [`${val} m³/día`, 'Consumo Diario']}
                   />
                   {aguaThreshold && (
                     <ReferenceLine
                       y={aguaThreshold}
-                      stroke="#f43f5e"
+                      stroke="#e11d48"
                       strokeDasharray="5 5"
                       label={{
                         value: `Máx ${aguaThreshold}`,
-                        fill: '#fb7185',
+                        fill: '#e11d48',
                         fontSize: 11,
                         position: 'insideTopRight',
                       }}
@@ -364,7 +366,7 @@ export default function GraficosPage() {
                   <Area
                     type="monotone"
                     dataKey="consumoDiario"
-                    stroke="#38bdf8"
+                    stroke="#0284c7"
                     strokeWidth={2.5}
                     fill="url(#aguaGrad)"
                     activeDot={{ r: 6 }}
@@ -376,15 +378,15 @@ export default function GraficosPage() {
         </div>
       </div>
 
-      {/* Bitácora detallada de la sede con acceso a fotos y videos */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-5 sm:p-6">
-        <h3 className="font-bold text-white text-base mb-4">
+      {/* Bitácora detallada de la sede */}
+      <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs">
+        <h3 className="font-bold text-slate-900 text-base mb-4">
           Bitácora de Lecturas y Evidencias ({activeSede?.nombre})
         </h3>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-sm">
             <thead>
-              <tr className="border-b border-slate-800 text-xs uppercase text-slate-400">
+              <tr className="border-b border-slate-200 text-xs uppercase text-slate-500">
                 <th className="py-3 pr-4">Fecha</th>
                 <th className="py-3 px-3">Servicio</th>
                 <th className="py-3 px-3">Lectura</th>
@@ -394,12 +396,12 @@ export default function GraficosPage() {
                 <th className="py-3 pl-3 text-right">Evidencia</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/70">
+            <tbody className="divide-y divide-slate-100">
               {[...sedeReadings].reverse().slice(0, 25).map((r) => {
                 const unit = r.tipo === 'luz' ? 'kWh' : 'm³';
                 return (
-                  <tr key={r.id} className="hover:bg-slate-800/30">
-                    <td className="py-3 pr-4 text-xs text-slate-300 whitespace-nowrap">
+                  <tr key={r.id} className="hover:bg-slate-50">
+                    <td className="py-3 pr-4 text-xs text-slate-600 whitespace-nowrap">
                       {new Date(r.fecha_lectura).toLocaleString('es-PE', {
                         day: '2-digit',
                         month: '2-digit',
@@ -410,31 +412,29 @@ export default function GraficosPage() {
                     </td>
                     <td className="py-3 px-3">
                       <span
-                        className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full ${
+                        className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full ${
                           r.tipo === 'luz'
-                            ? 'bg-amber-500/15 text-amber-300'
-                            : 'bg-sky-500/15 text-sky-300'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-sky-100 text-sky-800'
                         }`}
                       >
                         {r.tipo === 'luz' ? 'Luz' : 'Agua'}
                       </span>
                     </td>
-                    <td className="py-3 px-3 font-mono font-bold text-white whitespace-nowrap">
+                    <td className="py-3 px-3 font-mono font-bold text-slate-900 whitespace-nowrap">
                       {r.valor_lectura} {unit}
                     </td>
-                    <td className="py-3 px-3 font-mono text-slate-200 whitespace-nowrap">
+                    <td className="py-3 px-3 font-mono text-slate-700 whitespace-nowrap">
                       {r.consumo_diario} {unit}/d
                     </td>
-                    <td className="py-3 px-3 text-xs text-slate-400">
-                      {r.usuario_nombre}
-                    </td>
+                    <td className="py-3 px-3 text-xs text-slate-500">{r.usuario_nombre}</td>
                     <td className="py-3 px-3">
                       {r.es_anomalo ? (
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/20 text-rose-300">
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-700">
                           Anómalo
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-300">
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700">
                           Normal
                         </span>
                       )}
@@ -443,7 +443,7 @@ export default function GraficosPage() {
                       {r.media_url ? (
                         <button
                           onClick={() => setViewingMediaItem(r)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-sky-300 cursor-pointer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-sky-700 cursor-pointer"
                         >
                           {r.media_tipo === 'video' ? (
                             <FileVideo className="w-3.5 h-3.5" />
@@ -453,7 +453,7 @@ export default function GraficosPage() {
                           Ver
                         </button>
                       ) : (
-                        <span className="text-xs text-slate-600">—</span>
+                        <span className="text-xs text-slate-400">—</span>
                       )}
                     </td>
                   </tr>

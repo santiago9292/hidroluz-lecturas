@@ -8,19 +8,19 @@ export default function MediaModal({ item, onClose }) {
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-3xl w-full overflow-hidden shadow-2xl"
+        className="bg-white border border-slate-200 rounded-3xl max-w-3xl w-full overflow-hidden shadow-2xl"
       >
-        <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between gap-3">
+        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
           <div>
-            <h3 className="font-bold text-white text-sm sm:text-base">
+            <h3 className="font-bold text-slate-900 text-sm sm:text-base">
               Evidencia de Lectura: {item.valor_lectura}{' '}
               {item.tipo === 'luz' ? 'kWh' : 'm³'}
             </h3>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500">
               Registrado por {item.usuario_nombre} (DNI {item.usuario_dni}) ·{' '}
               {new Date(item.fecha_lectura).toLocaleString('es-PE')}
             </p>
@@ -30,14 +30,14 @@ export default function MediaModal({ item, onClose }) {
               href={item.media_url}
               target="_blank"
               rel="noreferrer"
-              className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition"
+              className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:text-slate-900 transition"
               title="Abrir original"
             >
               <ExternalLink className="w-4 h-4" />
             </a>
             <button
               onClick={onClose}
-              className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer"
+              className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:text-slate-900 transition cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -62,7 +62,7 @@ export default function MediaModal({ item, onClose }) {
         </div>
 
         {item.observaciones && (
-          <div className="px-5 py-3 bg-slate-900 border-t border-slate-800 text-xs text-slate-300">
+          <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-700">
             <strong>Observación:</strong> {item.observaciones}
           </div>
         )}

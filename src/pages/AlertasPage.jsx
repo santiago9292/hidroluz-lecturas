@@ -73,15 +73,15 @@ export default function AlertasPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-extrabold text-white tracking-tight">
+          <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">
             Centro de Alertas y Notificaciones Nativas
           </h2>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-slate-500">
             Supervisión en tiempo real de consumos excesivos y registros anómalos.
           </p>
         </div>
 
-        <div className="inline-flex rounded-2xl bg-slate-900 border border-slate-800 p-1 self-start">
+        <div className="inline-flex rounded-2xl bg-white border border-slate-200 p-1 self-start shadow-2xs">
           {[
             { id: 'pendientes', label: 'Pendientes' },
             { id: 'resueltas', label: 'Resueltas' },
@@ -90,10 +90,10 @@ export default function AlertasPage() {
             <button
               key={tab.id}
               onClick={() => setStatusFilter(tab.id)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
                 statusFilter === tab.id
-                  ? 'bg-sky-500 text-slate-950'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-sky-600 text-white shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               {tab.label}
@@ -102,21 +102,21 @@ export default function AlertasPage() {
         </div>
       </div>
 
-      {/* Panel de configuración de Alertas Nativas para Android, iOS y Escritorio */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/60 border border-slate-800 rounded-3xl p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Panel de configuración de Alertas Nativas */}
+      <div className="bg-gradient-to-r from-sky-50 via-white to-indigo-50/70 border border-sky-200 rounded-3xl p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
         <div className="flex items-start gap-3.5">
-          <div className="p-3 rounded-2xl bg-sky-500/15 text-sky-400 border border-sky-500/30 shrink-0">
+          <div className="p-3 rounded-2xl bg-white text-sky-600 border border-sky-200 shadow-2xs shrink-0">
             {pushState.permission === 'granted' ? (
-              <BellRing className="w-6 h-6 text-emerald-400" />
+              <BellRing className="w-6 h-6 text-emerald-600" />
             ) : (
               <Smartphone className="w-6 h-6" />
             )}
           </div>
           <div>
-            <h3 className="font-bold text-white text-base">
+            <h3 className="font-bold text-slate-900 text-base">
               Alertas Nativas en Android, iOS y PC de Escritorio
             </h3>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
               {pushState.permission === 'granted'
                 ? `Este dispositivo (${platform.name}) está suscrito a notificaciones Web Push nativas cuando se registre un exceso de consumo o lectura anómala.`
                 : 'Activa las notificaciones Web Push en este equipo o teléfono para recibir alertas nativas del sistema operativo incluso con la pantalla bloqueada.'}
@@ -129,7 +129,7 @@ export default function AlertasPage() {
             <button
               onClick={handleSendTestAlert}
               disabled={testingPush}
-              className="px-4 py-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs flex items-center gap-2 transition cursor-pointer"
+              className="px-4 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-white font-bold text-xs flex items-center gap-2 shadow-xs transition cursor-pointer"
             >
               <Bell className="w-4 h-4" />
               Activar en este dispositivo
@@ -138,9 +138,9 @@ export default function AlertasPage() {
           <button
             onClick={handleSendTestAlert}
             disabled={testingPush}
-            className="px-4 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 font-semibold text-xs flex items-center gap-2 transition cursor-pointer"
+            className="px-4 py-2.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-semibold text-xs flex items-center gap-2 shadow-2xs transition cursor-pointer"
           >
-            <Send className="w-3.5 h-3.5 text-sky-400" />
+            <Send className="w-3.5 h-3.5 text-sky-600" />
             {testingPush ? 'Enviando...' : 'Probar Alerta Nativa'}
           </button>
         </div>
@@ -148,10 +148,10 @@ export default function AlertasPage() {
 
       {/* Lista de Alertas */}
       {filteredAlerts.length === 0 ? (
-        <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-12 text-center">
-          <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto mb-3 opacity-80" />
-          <p className="font-bold text-white text-base">No hay alertas en esta vista</p>
-          <p className="text-xs text-slate-400 mt-1">
+        <div className="bg-white border border-slate-200 rounded-3xl p-12 text-center shadow-xs">
+          <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
+          <p className="font-bold text-slate-900 text-base">No hay alertas en esta vista</p>
+          <p className="text-xs text-slate-500 mt-1">
             Todos los consumos monitoreados se encuentran bajo control.
           </p>
         </div>
@@ -166,8 +166,8 @@ export default function AlertasPage() {
                 key={alert.id}
                 className={`rounded-3xl p-5 border transition ${
                   alert.resuelta
-                    ? 'bg-slate-900/50 border-slate-800/80 opacity-80'
-                    : 'bg-rose-950/20 border-rose-500/40 shadow-lg shadow-rose-950/10'
+                    ? 'bg-white border-slate-200 opacity-85'
+                    : 'bg-rose-50/60 border-rose-200 shadow-xs'
                 }`}
               >
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
@@ -175,29 +175,29 @@ export default function AlertasPage() {
                     <div
                       className={`p-2.5 rounded-2xl shrink-0 mt-0.5 ${
                         alert.resuelta
-                          ? 'bg-slate-800 text-slate-400'
-                          : 'bg-rose-500/20 text-rose-400'
+                          ? 'bg-slate-100 text-slate-500'
+                          : 'bg-rose-100 text-rose-600'
                       }`}
                     >
                       <AlertTriangle className="w-5 h-5" />
                     </div>
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="font-bold text-white text-sm sm:text-base">
+                        <h4 className="font-bold text-slate-900 text-sm sm:text-base">
                           {alert.titulo}
                         </h4>
                         <span
                           className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                             alert.resuelta
-                              ? 'bg-emerald-500/15 text-emerald-300'
-                              : 'bg-rose-500/20 text-rose-300'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-rose-100 text-rose-700'
                           }`}
                         >
                           {alert.resuelta ? 'Resuelta' : `Severidad ${alert.severidad}`}
                         </span>
                       </div>
-                      <p className="text-xs sm:text-sm text-slate-200">{alert.mensaje}</p>
-                      <p className="text-xs text-slate-400 pt-1">
+                      <p className="text-xs sm:text-sm text-slate-700">{alert.mensaje}</p>
+                      <p className="text-xs text-slate-500 pt-1">
                         Sede: <strong>{sede?.nombre || 'Sede'}</strong> ·{' '}
                         {new Date(alert.created_at).toLocaleString('es-PE')}
                         {linkedReading && ` · Registrado por ${linkedReading.usuario_nombre}`}
@@ -209,7 +209,7 @@ export default function AlertasPage() {
                     {linkedReading?.media_url && (
                       <button
                         onClick={() => setViewingMediaItem(linkedReading)}
-                        className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-sky-300 flex items-center gap-1.5 cursor-pointer"
+                        className="px-3 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-xs font-semibold text-sky-700 flex items-center gap-1.5 cursor-pointer"
                       >
                         <Eye className="w-3.5 h-3.5" /> Evidencia
                       </button>
@@ -218,7 +218,7 @@ export default function AlertasPage() {
                     {!alert.resuelta && (
                       <button
                         onClick={() => handleResolve(alert.id)}
-                        className="px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 text-xs font-bold text-emerald-300 flex items-center gap-1.5 cursor-pointer"
+                        className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white flex items-center gap-1.5 shadow-2xs cursor-pointer"
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" /> Marcar Resuelta
                       </button>

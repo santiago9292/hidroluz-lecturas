@@ -31,7 +31,6 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('usuarios');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Modal Usuario
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [userForm, setUserForm] = useState({
     id: null,
@@ -42,7 +41,6 @@ export default function AdminPage() {
     activo: true,
   });
 
-  // Modal Sede
   const [sedeModalOpen, setSedeModalOpen] = useState(false);
   const [sedeForm, setSedeForm] = useState({
     id: null,
@@ -55,7 +53,6 @@ export default function AdminPage() {
     umbralAgua: 25,
   });
 
-  // Modal Medidor
   const [meterModalOpen, setMeterModalOpen] = useState(false);
   const [meterForm, setMeterForm] = useState({
     id: null,
@@ -244,11 +241,11 @@ export default function AdminPage() {
       {/* Cabecera */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
-            <ShieldCheck className="w-6 h-6 text-amber-400" />
+          <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2.5">
+            <ShieldCheck className="w-6 h-6 text-amber-500" />
             Administración del Sistema (Sysadmin)
           </h2>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-slate-500">
             Gestiona usuarios por DNI, crea sedes, asigna personal y calibra umbrales de alerta.
           </p>
         </div>
@@ -262,21 +259,21 @@ export default function AdminPage() {
                 showToast('Datos de demostración restaurados.', 'info');
               }
             }}
-            className="self-start px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-medium text-slate-300 flex items-center gap-1.5 cursor-pointer"
+            className="self-start px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" /> Restaurar Demo
           </button>
         )}
       </div>
 
-      {/* Pestañas: Usuarios vs Sedes y Medidores */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+      {/* Pestañas */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
         <button
           onClick={() => setActiveTab('usuarios')}
           className={`px-4 py-2.5 rounded-2xl text-sm font-bold flex items-center gap-2 transition cursor-pointer ${
             activeTab === 'usuarios'
-              ? 'bg-sky-500 text-slate-950'
-              : 'bg-slate-900 text-slate-400 hover:text-white'
+              ? 'bg-sky-600 text-white shadow-xs'
+              : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
           }`}
         >
           <Users className="w-4 h-4" /> Usuarios ({users.length})
@@ -285,8 +282,8 @@ export default function AdminPage() {
           onClick={() => setActiveTab('sedes')}
           className={`px-4 py-2.5 rounded-2xl text-sm font-bold flex items-center gap-2 transition cursor-pointer ${
             activeTab === 'sedes'
-              ? 'bg-sky-500 text-slate-950'
-              : 'bg-slate-900 text-slate-400 hover:text-white'
+              ? 'bg-sky-600 text-white shadow-xs'
+              : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
           }`}
         >
           <Building2 className="w-4 h-4" /> Sedes y Medidores ({sedes.length})
@@ -298,28 +295,28 @@ export default function AdminPage() {
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 placeholder="Buscar usuario por DNI o nombre..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-900 border border-slate-800 focus:border-sky-400 outline-none text-sm text-white"
+                className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-white border border-slate-300 focus:border-sky-500 outline-none text-sm text-slate-900 shadow-2xs"
               />
             </div>
             <button
               onClick={openNewUser}
-              className="px-4 py-2.5 rounded-2xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 cursor-pointer"
+              className="px-4 py-2.5 rounded-2xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-xs cursor-pointer"
             >
               <UserPlus className="w-4 h-4" /> Nuevo Usuario con DNI
             </button>
           </div>
 
-          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl overflow-hidden">
+          <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-sm">
                 <thead>
-                  <tr className="border-b border-slate-800 text-xs uppercase text-slate-400 bg-slate-950/40">
+                  <tr className="border-b border-slate-200 text-xs uppercase text-slate-500 bg-slate-50/80">
                     <th className="py-3.5 px-5">DNI</th>
                     <th className="py-3.5 px-4">Nombre Completo</th>
                     <th className="py-3.5 px-4">Rol</th>
@@ -328,37 +325,37 @@ export default function AdminPage() {
                     <th className="py-3.5 px-5 text-right">Acciones</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/70">
+                <tbody className="divide-y divide-slate-100">
                   {filteredUsers.map((u) => {
                     const userSede = sedes.find((s) => s.id === u.sede_id);
                     return (
-                      <tr key={u.id} className="hover:bg-slate-800/30">
-                        <td className="py-3.5 px-5 font-mono font-bold text-sky-300">{u.dni}</td>
-                        <td className="py-3.5 px-4 font-semibold text-white">
+                      <tr key={u.id} className="hover:bg-slate-50">
+                        <td className="py-3.5 px-5 font-mono font-bold text-sky-700">{u.dni}</td>
+                        <td className="py-3.5 px-4 font-semibold text-slate-900">
                           {u.nombre_completo}
                         </td>
                         <td className="py-3.5 px-4">
                           <span
                             className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
                               u.rol === 'sysadmin'
-                                ? 'bg-amber-500/20 text-amber-300'
-                                : 'bg-slate-800 text-slate-300'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-slate-100 text-slate-700'
                             }`}
                           >
                             {u.rol === 'sysadmin' ? 'Sysadmin' : 'Operario'}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 text-slate-300">
+                        <td className="py-3.5 px-4 text-slate-600">
                           {u.rol === 'sysadmin'
                             ? 'Todas las sedes'
                             : userSede?.nombre || 'Sin asignar'}
                         </td>
                         <td className="py-3.5 px-4">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                            className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
                               u.activo
-                                ? 'bg-emerald-500/15 text-emerald-300'
-                                : 'bg-rose-500/15 text-rose-300'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : 'bg-rose-100 text-rose-700'
                             }`}
                           >
                             {u.activo ? 'Activo' : 'Inactivo'}
@@ -368,7 +365,7 @@ export default function AdminPage() {
                           <div className="inline-flex items-center gap-1.5">
                             <button
                               onClick={() => openEditUser(u)}
-                              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer"
+                              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
                               title="Editar usuario"
                             >
                               <Edit3 className="w-4 h-4" />
@@ -376,7 +373,7 @@ export default function AdminPage() {
                             {u.id !== currentUser.id && (
                               <button
                                 onClick={() => handleDeleteUser(u)}
-                                className="p-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 cursor-pointer"
+                                className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer"
                                 title="Eliminar usuario"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -400,7 +397,7 @@ export default function AdminPage() {
           <div className="flex justify-end">
             <button
               onClick={openNewSede}
-              className="px-4 py-2.5 rounded-2xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-sm flex items-center gap-2 cursor-pointer"
+              className="px-4 py-2.5 rounded-2xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-sm flex items-center gap-2 shadow-xs cursor-pointer"
             >
               <Plus className="w-4 h-4" /> Crear Nueva Sede
             </button>
@@ -414,17 +411,17 @@ export default function AdminPage() {
               return (
                 <div
                   key={sede.id}
-                  className="bg-slate-900/80 border border-slate-800 rounded-3xl p-5 space-y-4"
+                  className="bg-white border border-slate-200 rounded-3xl p-5 space-y-4 shadow-xs"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-lg text-white">{sede.nombre}</h3>
-                        <span className="px-2 py-0.5 rounded-lg bg-slate-800 font-mono text-xs text-sky-300">
+                        <h3 className="font-bold text-lg text-slate-900">{sede.nombre}</h3>
+                        <span className="px-2 py-0.5 rounded-lg bg-sky-50 border border-sky-200 font-mono text-xs font-semibold text-sky-700">
                           {sede.codigo}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400 mt-0.5">
+                      <p className="text-xs text-slate-500 mt-0.5">
                         {sede.direccion || 'Sin dirección'} {sede.ciudad ? `· ${sede.ciudad}` : ''}{' '}
                         · {assignedCount} operario(s)
                       </p>
@@ -433,14 +430,14 @@ export default function AdminPage() {
                     <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => openEditSede(sede)}
-                        className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer"
+                        className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
                         title="Editar sede"
                       >
                         <Edit3 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDeleteSede(sede)}
-                        className="p-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 cursor-pointer"
+                        className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer"
                         title="Eliminar sede"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -448,15 +445,15 @@ export default function AdminPage() {
                     </div>
                   </div>
 
-                  {/* Lista de medidores de la sede */}
-                  <div className="space-y-2 pt-2 border-t border-slate-800/80">
+                  {/* Lista de medidores */}
+                  <div className="space-y-2 pt-2 border-t border-slate-100">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                         <Gauge className="w-3.5 h-3.5" /> Medidores y Umbrales ({sedeMeters.length})
                       </span>
                       <button
                         onClick={() => openNewMeter(sede.id)}
-                        className="text-xs font-semibold text-sky-400 hover:text-sky-300 flex items-center gap-1 cursor-pointer"
+                        className="text-xs font-bold text-sky-600 hover:text-sky-700 flex items-center gap-1 cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" /> Agregar medidor
                       </button>
@@ -465,19 +462,19 @@ export default function AdminPage() {
                     {sedeMeters.map((m) => (
                       <div
                         key={m.id}
-                        className="flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-2xl bg-slate-950/70 border border-slate-800"
+                        className="flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           {m.tipo === 'luz' ? (
-                            <Zap className="w-4 h-4 text-amber-400 shrink-0" />
+                            <Zap className="w-4 h-4 text-amber-500 shrink-0" />
                           ) : (
-                            <Droplets className="w-4 h-4 text-sky-400 shrink-0" />
+                            <Droplets className="w-4 h-4 text-sky-600 shrink-0" />
                           )}
                           <div className="min-w-0">
-                            <p className="text-xs font-semibold text-white truncate">{m.nombre}</p>
-                            <p className="text-[11px] text-slate-400">
+                            <p className="text-xs font-bold text-slate-900 truncate">{m.nombre}</p>
+                            <p className="text-[11px] text-slate-500">
                               Máx diario:{' '}
-                              <strong>
+                              <strong className="text-slate-700">
                                 {m.umbral_diario_max
                                   ? `${m.umbral_diario_max} ${m.unidad}/día`
                                   : 'Sin tope fijo'}
@@ -489,13 +486,13 @@ export default function AdminPage() {
                         <div className="flex items-center gap-1 shrink-0">
                           <button
                             onClick={() => openEditMeter(m)}
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
+                            className="p-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 cursor-pointer"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => handleDeleteMeter(m)}
-                            className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 cursor-pointer"
+                            className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -512,26 +509,26 @@ export default function AdminPage() {
 
       {/* MODAL CREAR / EDITAR USUARIO */}
       {userModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
           <form
             onSubmit={handleSaveUser}
-            className="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl"
+            className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl"
           >
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-lg text-white">
+              <h3 className="font-bold text-lg text-slate-900">
                 {userForm.id ? 'Editar Usuario' : 'Crear Nuevo Usuario'}
               </h3>
               <button
                 type="button"
                 onClick={() => setUserModalOpen(false)}
-                className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white"
+                className="p-1.5 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
                 DNI de acceso *
               </label>
               <input
@@ -543,12 +540,12 @@ export default function AdminPage() {
                   setUserForm({ ...userForm, dni: e.target.value.replace(/[^0-9A-Za-z]/g, '') })
                 }
                 placeholder="Ej. 72849102"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 font-mono"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Nombre Completo *
               </label>
               <input
@@ -557,30 +554,30 @@ export default function AdminPage() {
                 value={userForm.nombre_completo}
                 onChange={(e) => setUserForm({ ...userForm, nombre_completo: e.target.value })}
                 placeholder="Ej. María Fernández"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Rol</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Rol</label>
                 <select
                   value={userForm.rol}
                   onChange={(e) => setUserForm({ ...userForm, rol: e.target.value })}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm"
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-sm"
                 >
                   <option value="operario">Operario de Sede</option>
                   <option value="sysadmin">Sysadmin Global</option>
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Estado</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Estado</label>
                 <select
                   value={userForm.activo ? 'true' : 'false'}
                   onChange={(e) =>
                     setUserForm({ ...userForm, activo: e.target.value === 'true' })
                   }
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm"
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-sm"
                 >
                   <option value="true">Activo</option>
                   <option value="false">Inactivo</option>
@@ -590,14 +587,14 @@ export default function AdminPage() {
 
             {userForm.rol === 'operario' && (
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Sede Asignada (Solo podrá registrar en esta sede) *
                 </label>
                 <select
                   required
                   value={userForm.sede_id}
                   onChange={(e) => setUserForm({ ...userForm, sede_id: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-sm"
                 >
                   <option value="">Selecciona una sede...</option>
                   {sedes.map((s) => (
@@ -613,13 +610,13 @@ export default function AdminPage() {
               <button
                 type="button"
                 onClick={() => setUserModalOpen(false)}
-                className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold"
+                className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-semibold"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold cursor-pointer"
               >
                 Guardar Usuario
               </button>
@@ -630,19 +627,19 @@ export default function AdminPage() {
 
       {/* MODAL CREAR / EDITAR SEDE */}
       {sedeModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
           <form
             onSubmit={handleSaveSede}
-            className="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl"
+            className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl"
           >
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-lg text-white">
+              <h3 className="font-bold text-lg text-slate-900">
                 {sedeForm.id ? 'Editar Sede' : 'Nueva Sede'}
               </h3>
               <button
                 type="button"
                 onClick={() => setSedeModalOpen(false)}
-                className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white"
+                className="p-1.5 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -650,7 +647,7 @@ export default function AdminPage() {
 
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2">
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Nombre de Sede *
                 </label>
                 <input
@@ -659,11 +656,11 @@ export default function AdminPage() {
                   value={sedeForm.nombre}
                   onChange={(e) => setSedeForm({ ...sedeForm, nombre: e.target.value })}
                   placeholder="Ej. Sede Callao"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Código *</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Código *</label>
                 <input
                   type="text"
                   required
@@ -672,60 +669,60 @@ export default function AdminPage() {
                     setSedeForm({ ...sedeForm, codigo: e.target.value.toUpperCase() })
                   }
                   placeholder="CAL-04"
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono text-sm"
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 font-mono text-sm"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Ciudad</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Ciudad</label>
                 <input
                   type="text"
                   value={sedeForm.ciudad}
                   onChange={(e) => setSedeForm({ ...sedeForm, ciudad: e.target.value })}
                   placeholder="Lima"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Dirección</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Dirección</label>
                 <input
                   type="text"
                   value={sedeForm.direccion}
                   onChange={(e) => setSedeForm({ ...sedeForm, direccion: e.target.value })}
                   placeholder="Av. Argentina 1200"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-sm"
                 />
               </div>
             </div>
 
             {!sedeForm.id && (
-              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
-                <p className="text-xs font-semibold text-sky-300">
+              <div className="p-3.5 rounded-2xl bg-sky-50/70 border border-sky-200 space-y-3">
+                <p className="text-xs font-bold text-sky-800">
                   Umbrales diarios iniciales (crea medidor de Luz y Agua automáticamente):
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                       Máx. Luz (kWh/día)
                     </label>
                     <input
                       type="number"
                       value={sedeForm.umbralLuz}
                       onChange={(e) => setSedeForm({ ...sedeForm, umbralLuz: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white font-mono text-sm"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                       Máx. Agua (m³/día)
                     </label>
                     <input
                       type="number"
                       value={sedeForm.umbralAgua}
                       onChange={(e) => setSedeForm({ ...sedeForm, umbralAgua: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white font-mono text-sm"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-sm"
                     />
                   </div>
                 </div>
@@ -736,13 +733,13 @@ export default function AdminPage() {
               <button
                 type="button"
                 onClick={() => setSedeModalOpen(false)}
-                className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold"
+                className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-semibold"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold cursor-pointer"
               >
                 Guardar Sede
               </button>
@@ -753,19 +750,19 @@ export default function AdminPage() {
 
       {/* MODAL CREAR / EDITAR MEDIDOR */}
       {meterModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
           <form
             onSubmit={handleSaveMeter}
-            className="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl"
+            className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl"
           >
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-lg text-white">
+              <h3 className="font-bold text-lg text-slate-900">
                 {meterForm.id ? 'Configurar Medidor' : 'Agregar Medidor'}
               </h3>
               <button
                 type="button"
                 onClick={() => setMeterModalOpen(false)}
-                className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white"
+                className="p-1.5 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -773,30 +770,30 @@ export default function AdminPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Servicio</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Servicio</label>
                 <select
                   value={meterForm.tipo}
                   onChange={(e) => setMeterForm({ ...meterForm, tipo: e.target.value })}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm"
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-sm"
                 >
                   <option value="luz">Luz (kWh)</option>
                   <option value="agua">Agua (m³)</option>
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">N° Serie</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">N° Serie</label>
                 <input
                   type="text"
                   value={meterForm.numero_serie}
                   onChange={(e) => setMeterForm({ ...meterForm, numero_serie: e.target.value })}
                   placeholder="Ej. MED-209"
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono text-sm"
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 font-mono text-sm"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Nombre del Medidor *
               </label>
               <input
@@ -804,13 +801,13 @@ export default function AdminPage() {
                 required
                 value={meterForm.nombre}
                 onChange={(e) => setMeterForm({ ...meterForm, nombre: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-sm"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Umbral Diario Máx ({meterForm.tipo === 'luz' ? 'kWh' : 'm³'}/día)
                 </label>
                 <input
@@ -821,11 +818,11 @@ export default function AdminPage() {
                     setMeterForm({ ...meterForm, umbral_diario_max: e.target.value })
                   }
                   placeholder="Vacío = sin límite fijo"
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono text-sm"
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 font-mono text-sm"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
                   % Alerta s/Promedio
                 </label>
                 <input
@@ -834,7 +831,7 @@ export default function AdminPage() {
                   onChange={(e) =>
                     setMeterForm({ ...meterForm, porcentaje_alerta_promedio: e.target.value })
                   }
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono text-sm"
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 font-mono text-sm"
                 />
               </div>
             </div>
@@ -843,13 +840,13 @@ export default function AdminPage() {
               <button
                 type="button"
                 onClick={() => setMeterModalOpen(false)}
-                className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold"
+                className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-semibold"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold cursor-pointer"
               >
                 Guardar Medidor
               </button>
