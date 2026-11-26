@@ -1,9 +1,17 @@
 import { supabase, isSupabaseConfigured } from './supabase';
-import { evaluateReadingConsumption, sanitizeDni } from './consumption';
+import {
+  decideAlertPersistence,
+  evaluateAlertsForReading,
+  evaluateMissingReadingsAlerts,
+  sanitizeDni,
+  validateReadingBeforeSave,
+} from './consumption';
 import {
   DEFAULT_TRIFASICO_CODES,
+  buildDefaultTariffConfig,
   encodeMeterSerieFallback,
   encodeReadingObsFallback,
+  normalizeMeterConfig,
   normalizeMeterObis,
   normalizeReadingObis,
 } from './obis';
@@ -26,16 +34,84 @@ function fileToDataUrl(file) {
   });
 }
 
-function isMissingColumnError(error) {
+function isSchemaFallbackNeeded(error) {
   if (!error) return false;
   const msg = String(error.message || '');
   return (
     error.code === 'PGRST204' ||
     error.code === '42703' ||
+    error.code === '23514' ||
     msg.includes('es_trifasico') ||
     msg.includes('codigos_obis') ||
-    msg.includes('lecturas_obis')
+    msg.includes('config_tarifaria') ||
+    msg.includes('valor_crudo') ||
+    msg.includes('lecturas_obis') ||
+    msg.includes('calculos') ||
+    msg.includes('evento_lectura') ||
+    msg.includes('codigo_regla') ||
+    msg.includes('periodo_key') ||
+    msg.includes('alerts_tipo_alerta_check') ||
+    msg.includes('alerts_severidad_check')
   );
+}
+
+function mapLegacyAlertColumns(alertObj) {
+  const legacyTypeMap = {
+    consumo_desvio_4sem: 'exceso_promedio',
+    demanda_vs_5m_total: 'exceso_umbral',
+    demanda_vs_5m_hp: 'exceso_umbral',
+    calificacion_tarifaria: 'exceso_umbral',
+    reactiva_porcentaje: 'exceso_umbral',
+    consumo_cero_laborable: 'salto_extremo',
+    sin_lectura_24h: 'salto_extremo',
+  };
+  const legacySeverity = alertObj.severidad === 'roja' ? 'alta' : 'media';
+
+  return {
+    sede_id: alertObj.sede_id,
+    meter_id: alertObj.meter_id,
+    reading_id: alertObj.reading_id,
+    tipo_alerta: legacyTypeMap[alertObj.codigo_regla] || 'exceso_umbral',
+    severidad: legacySeverity,
+    titulo: `[${(alertObj.severidad || 'AVISO').toUpperCase()}] ${alertObj.titulo}`,
+    mensaje: `[R:${alertObj.codigo_regla}|P:${alertObj.periodo_key}|V:${alertObj.valor_detectado}|U:${alertObj.umbral_referencia}] ${alertObj.mensaje}`,
+    resuelta: false,
+  };
+}
+
+function normalizeAlertRow(alertRow) {
+  if (!alertRow) return alertRow;
+  if (alertRow.codigo_regla && alertRow.causa) return alertRow;
+
+  // Extraer metadatos si provienen del modo fallback previo a migración 004
+  const msg = String(alertRow.mensaje || '');
+  const metaMatch = msg.match(/^\[R:([^|]*)\|P:([^|]*)\|V:([^|]*)\|U:([^\]]*)\]\s*(.*)$/);
+  if (metaMatch) {
+    const [, regla, periodo, val, umb, restMsg] = metaMatch;
+    const sevMatch = String(alertRow.titulo || '').match(/^\[(ROJA|AMBAR|AVISO)\]\s*(.*)$/i);
+    const parsedSev = sevMatch ? sevMatch[1].toLowerCase() : alertRow.severidad;
+    const cleanTitle = sevMatch ? sevMatch[2] : alertRow.titulo;
+
+    const causaMatch = restMsg.match(/Causa:\s*(.*?)\s*Acción:\s*(.*)$/);
+
+    return {
+      ...alertRow,
+      titulo: cleanTitle,
+      severidad: parsedSev,
+      codigo_regla: regla || alertRow.tipo_alerta,
+      periodo_key: periodo || null,
+      valor_detectado: val !== 'null' && val !== '' ? Number(val) : null,
+      umbral_referencia: umb !== 'null' && umb !== '' ? Number(umb) : null,
+      causa: causaMatch ? causaMatch[1] : restMsg,
+      accion_sugerida: causaMatch ? causaMatch[2] : null,
+      mensaje: restMsg,
+    };
+  }
+
+  return {
+    ...alertRow,
+    codigo_regla: alertRow.codigo_regla || alertRow.tipo_alerta,
+  };
 }
 
 /**
@@ -87,7 +163,95 @@ export async function loginWithDni(rawDni) {
 }
 
 /**
- * 2. CARGA COMPLETA DE DATOS SEGÚN ROL Y SEDE
+ * Persiste o escala una alerta evitando duplicarla en el mismo periodo salvo que empeore.
+ */
+async function persistAlertIfNeeded(candidate, existingAlerts = []) {
+  const decision = decideAlertPersistence(candidate, existingAlerts);
+  if (decision.action === 'skip') return null;
+
+  if (isSupabaseConfigured) {
+    const richPayload = {
+      sede_id: candidate.sede_id,
+      meter_id: candidate.meter_id,
+      reading_id: candidate.reading_id || null,
+      tipo_alerta: candidate.tipo_alerta,
+      codigo_regla: candidate.codigo_regla,
+      periodo_key: candidate.periodo_key,
+      severidad: candidate.severidad,
+      valor_detectado: candidate.valor_detectado,
+      umbral_referencia: candidate.umbral_referencia,
+      titulo: candidate.titulo,
+      causa: candidate.causa,
+      accion_sugerida: candidate.accion_sugerida,
+      mensaje: candidate.mensaje,
+      resuelta: false,
+    };
+
+    if (decision.action === 'update' && decision.existingId) {
+      let { data, error } = await supabase
+        .from('alerts')
+        .update(richPayload)
+        .eq('id', decision.existingId)
+        .select('*')
+        .maybeSingle();
+
+      if (error && isSchemaFallbackNeeded(error)) {
+        const fallback = mapLegacyAlertColumns(candidate);
+        const retry = await supabase
+          .from('alerts')
+          .update(fallback)
+          .eq('id', decision.existingId)
+          .select('*')
+          .maybeSingle();
+        data = retry.data;
+      }
+      return normalizeAlertRow(data);
+    }
+
+    let { data, error } = await supabase
+      .from('alerts')
+      .insert(richPayload)
+      .select('*')
+      .maybeSingle();
+
+    if (error && isSchemaFallbackNeeded(error)) {
+      const fallback = mapLegacyAlertColumns(candidate);
+      const retry = await supabase.from('alerts').insert(fallback).select('*').maybeSingle();
+      data = retry.data;
+    }
+    return normalizeAlertRow(data);
+  }
+
+  // Modo Demo Local
+  const db = loadDemoDb();
+  if (decision.action === 'update' && decision.existingId) {
+    let updatedItem = null;
+    db.alerts = db.alerts.map((a) => {
+      if (a.id === decision.existingId) {
+        updatedItem = { ...a, ...candidate, created_at: new Date().toISOString() };
+        return updatedItem;
+      }
+      return a;
+    });
+    saveDemoDb(db, false);
+    return updatedItem;
+  }
+
+  const created = {
+    id: uid('alert'),
+    ...candidate,
+    resuelta: false,
+    resuelta_por: null,
+    resuelta_at: null,
+    created_at: new Date().toISOString(),
+  };
+  db.alerts.unshift(created);
+  saveDemoDb(db, false);
+  return created;
+}
+
+/**
+ * 2. CARGA COMPLETA DE DATOS SEGÚN ROL Y SEDE + VERIFICACIÓN DE >24H SIN LECTURA
  */
 export async function fetchAllAppData(currentUser) {
   if (!currentUser) {
@@ -103,12 +267,12 @@ export async function fetchAllAppData(currentUser) {
       .from('readings')
       .select('*')
       .order('fecha_lectura', { ascending: false })
-      .limit(600);
+      .limit(800);
     let alertsQ = supabase
       .from('alerts')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(200);
+      .limit(250);
 
     if (!isSysadmin && currentUser.sede_id) {
       sedesQ = sedesQ.eq('id', currentUser.sede_id);
@@ -126,8 +290,24 @@ export async function fetchAllAppData(currentUser) {
     const sedes = results[0].data || [];
     const meters = (results[1].data || []).map(normalizeMeterObis);
     const readings = (results[2].data || []).map(normalizeReadingObis);
-    const alerts = results[3].data || [];
+    let alerts = (results[3].data || []).map(normalizeAlertRow);
     const users = isSysadmin ? results[4].data || [] : [];
+
+    // Evaluar sedes / medidores sin lectura > 24 h sin duplicar avisos
+    const missingCandidates = evaluateMissingReadingsAlerts({
+      sedes,
+      meters,
+      readings,
+      now: new Date(),
+    });
+
+    for (const mc of missingCandidates) {
+      const meterAlerts = alerts.filter((a) => a.meter_id === mc.meter_id);
+      const savedMissing = await persistAlertIfNeeded(mc, meterAlerts);
+      if (savedMissing) {
+        alerts = [savedMissing, ...alerts.filter((a) => a.id !== savedMissing.id)];
+      }
+    }
 
     let updatedUser = currentUser;
     const { data: freshProfile } = await supabase
@@ -163,14 +343,29 @@ export async function fetchAllAppData(currentUser) {
     .map(normalizeReadingObis)
     .sort((a, b) => new Date(b.fecha_lectura).getTime() - new Date(a.fecha_lectura).getTime());
 
-  const alerts = (
+  let alerts = (
     isSysadmin
       ? db.alerts
       : db.alerts.filter((a) => a.sede_id === updatedUser.sede_id)
-  ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  )
+    .map(normalizeAlertRow)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  const missingCandidates = evaluateMissingReadingsAlerts({
+    sedes,
+    meters,
+    readings,
+    now: new Date(),
+  });
+  for (const mc of missingCandidates) {
+    const meterAlerts = alerts.filter((a) => a.meter_id === mc.meter_id);
+    const savedMissing = await persistAlertIfNeeded(mc, meterAlerts);
+    if (savedMissing) {
+      alerts = [savedMissing, ...alerts.filter((a) => a.id !== savedMissing.id)];
+    }
+  }
 
   const users = isSysadmin ? db.users : [];
-
   return { sedes, meters, readings, alerts, users, updatedUser };
 }
 
@@ -222,7 +417,7 @@ export async function uploadMeterMedia({ file, sedeId, meterId }) {
 }
 
 /**
- * 4. REGISTRAR LECTURA (SOPORTA MONOFÁSICO, AGUA Y TRIFÁSICO OBIS)
+ * 4. REGISTRAR LECTURA (PRESERVA CRUDO INTACTO, VALIDA ANTES DE GUARDAR Y DEDUPLICA ALERTAS)
  */
 export async function registerMeterReading({
   currentUser,
@@ -233,66 +428,79 @@ export async function registerMeterReading({
   fechaLectura,
   observaciones,
   file,
-  previousReadings,
+  previousReadings = [],
+  existingAlerts = [],
+  confirmation = {},
 }) {
   if (!currentUser) throw new Error('Sesión no válida.');
   if (currentUser.rol !== 'sysadmin' && currentUser.sede_id !== sede.id) {
     throw new Error('Solo puedes registrar lecturas correspondientes a tu propia sede.');
   }
 
-  const isTrifasico = Boolean(meter.es_trifasico && meter.tipo === 'luz');
-  let sanitizedObis = null;
+  const normMeter = normalizeMeterObis(meter);
+  const isTrifasico = Boolean(normMeter.es_trifasico && normMeter.tipo === 'luz');
+  const isoDate = fechaLectura ? new Date(fechaLectura).toISOString() : new Date().toISOString();
 
-  if (isTrifasico) {
-    const codes = meter.codigos_obis || DEFAULT_TRIFASICO_CODES;
-    sanitizedObis = {};
-    for (const c of codes) {
-      const raw = obisValues?.[c.code];
-      if (raw === '' || raw === undefined || raw === null || Number.isNaN(Number(raw))) {
-        throw new Error(`Ingresa un valor válido para el Código ${c.code}.`);
+  // Limpiar valores OBIS crudos exactamente como fueron digitados
+  let rawObisClean = null;
+  if (isTrifasico && obisValues) {
+    rawObisClean = {};
+    Object.entries(obisValues).forEach(([code, val]) => {
+      if (val !== '' && val !== null && val !== undefined && !Number.isNaN(Number(val))) {
+        rawObisClean[code] = Number(val);
       }
-      if (Number(raw) < 0) {
-        throw new Error(`El Código ${c.code} no puede ser negativo.`);
-      }
-      sanitizedObis[c.code] = Number(raw);
-    }
-  } else {
-    const numVal = Number(valorLectura);
-    if (valorLectura === '' || Number.isNaN(numVal) || numVal < 0) {
-      throw new Error('Ingresa un valor numérico válido mayor o igual a 0.');
-    }
+    });
   }
 
-  const isoDate = fechaLectura ? new Date(fechaLectura).toISOString() : new Date().toISOString();
-  const evalResult = evaluateReadingConsumption({
-    valorLectura: Number(valorLectura || 0),
-    obisValues: sanitizedObis,
+  const rawSingleValue = !isTrifasico && valorLectura !== '' ? Number(valorLectura) : null;
+
+  // Ejecutar validaciones estrictas antes de subir o insertar
+  const validation = validateReadingBeforeSave({
+    valorCrudo: rawSingleValue,
+    obisValues: rawObisClean,
     fechaLectura: isoDate,
-    meter,
+    meter: normMeter,
     previousReadings,
+    hasMedia: Boolean(file),
+    confirmation,
   });
+
+  if (!validation.valid) {
+    const firstIssue = validation.blockingIssues[0];
+    const err = new Error(firstIssue?.message || 'La lectura requiere confirmación antes de guardar.');
+    err.validation = validation;
+    throw err;
+  }
+
+  const step = validation.step;
+  const eventoLectura =
+    confirmation?.motivoEnergiaMenor ||
+    (step.abreNuevoPeriodoDemanda ? 'reinicio_demanda' : null) ||
+    (confirmation?.confirmarBajaDemandaMitad ? 'demanda_revisada' : null) ||
+    (confirmation?.confirmarSalto ? 'salto_confirmado' : null);
 
   const { mediaUrl, mediaPath, mediaTipo } = await uploadMeterMedia({
     file,
     sedeId: sede.id,
-    meterId: meter.id,
+    meterId: normMeter.id,
   });
 
-  const baseReadingPayload = {
+  // `valor_crudo` y `lecturas_obis` guardan el valor crudo sin sobrescribirlo nunca
+  const legacyReadingBase = {
     sede_id: sede.id,
-    meter_id: meter.id,
+    meter_id: normMeter.id,
     user_id: currentUser.id,
     usuario_nombre: currentUser.nombre_completo,
     usuario_dni: currentUser.dni,
-    tipo: meter.tipo,
-    valor_lectura: evalResult.valorCalculado,
-    lectura_anterior: evalResult.lecturaAnterior,
-    dias_transcurridos: evalResult.diasTranscurridos,
-    consumo_total_periodo: evalResult.consumoTotalPeriodo,
-    consumo_diario: evalResult.consumoDiario,
-    promedio_previo: evalResult.promedioPrevio,
-    es_anomalo: evalResult.esAnomalo,
-    motivo_anomalia: evalResult.motivoAnomalia,
+    tipo: normMeter.tipo,
+    valor_lectura: step.valorCrudoPrimario,
+    lectura_anterior: step.prevValorCrudoPrimario,
+    dias_transcurridos: step.diasEquivalentes || 1,
+    consumo_total_periodo: step.consumoTotal,
+    consumo_diario: step.promedioDiario,
+    promedio_previo: null,
+    es_anomalo: false,
+    motivo_anomalia: null,
     media_url: mediaUrl,
     media_path: mediaPath,
     media_tipo: mediaTipo,
@@ -301,105 +509,131 @@ export async function registerMeterReading({
   };
 
   let savedReading = null;
-  let createdAlert = null;
 
   if (isSupabaseConfigured) {
-    const payloadWithJsonb = sanitizedObis
-      ? { ...baseReadingPayload, lecturas_obis: sanitizedObis }
-      : baseReadingPayload;
+    const richPayload = {
+      ...legacyReadingBase,
+      valor_crudo: step.valorCrudoPrimario,
+      lecturas_obis: rawObisClean,
+      calculos: step,
+      evento_lectura: eventoLectura,
+    };
 
     let { data: inserted, error } = await supabase
       .from('readings')
-      .insert(payloadWithJsonb)
+      .insert(richPayload)
       .select('*')
       .single();
 
-    // Respaldo automático transparente si aún no se ejecutó 003_trifasico_support.sql
-    if (error && sanitizedObis && isMissingColumnError(error)) {
+    if (error && isSchemaFallbackNeeded(error)) {
       const fallbackPayload = {
-        ...baseReadingPayload,
-        observaciones: encodeReadingObsFallback(observaciones, sanitizedObis),
+        ...legacyReadingBase,
+        observaciones: encodeReadingObsFallback(observaciones, {
+          lecturasObis: rawObisClean,
+          valorCrudo: step.valorCrudoPrimario,
+          calculos: step,
+          eventoLectura,
+        }),
       };
       const retry = await supabase.from('readings').insert(fallbackPayload).select('*').single();
       inserted = retry.data;
       error = retry.error;
     }
 
-    if (error) {
-      throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
     savedReading = normalizeReadingObis(inserted);
-
-    if (evalResult.esAnomalo && evalResult.tipoAlerta) {
-      const alertTitle =
-        evalResult.tipoAlerta === 'lectura_menor'
-          ? `Registro anómalo (${meter.tipo.toUpperCase()}) en ${sede.nombre}`
-          : `Consumo excesivo de ${meter.tipo.toUpperCase()} en ${sede.nombre}`;
-
-      const { data: alertRow } = await supabase
-        .from('alerts')
-        .insert({
-          sede_id: sede.id,
-          meter_id: meter.id,
-          reading_id: inserted.id,
-          tipo_alerta: evalResult.tipoAlerta,
-          severidad: evalResult.severidad,
-          titulo: alertTitle,
-          mensaje: evalResult.motivoAnomalia,
-          resuelta: false,
-        })
-        .select('*')
-        .single();
-
-      createdAlert = alertRow;
-    }
   } else {
     const db = loadDemoDb();
     savedReading = {
       id: uid('read'),
-      ...baseReadingPayload,
-      lecturas_obis: sanitizedObis,
+      ...legacyReadingBase,
+      valor_crudo: step.valorCrudoPrimario,
+      lecturas_obis: rawObisClean,
+      calculos: step,
+      evento_lectura: eventoLectura,
       created_at: new Date().toISOString(),
     };
     db.readings.unshift(savedReading);
-
-    if (evalResult.esAnomalo && evalResult.tipoAlerta) {
-      const alertTitle =
-        evalResult.tipoAlerta === 'lectura_menor'
-          ? `Registro anómalo (${meter.tipo.toUpperCase()}) en ${sede.nombre}`
-          : `Consumo excesivo de ${meter.tipo.toUpperCase()} en ${sede.nombre}`;
-
-      createdAlert = {
-        id: uid('alert'),
-        sede_id: sede.id,
-        meter_id: meter.id,
-        reading_id: savedReading.id,
-        tipo_alerta: evalResult.tipoAlerta,
-        severidad: evalResult.severidad,
-        titulo: alertTitle,
-        mensaje: evalResult.motivoAnomalia,
-        resuelta: false,
-        resuelta_por: null,
-        resuelta_at: null,
-        created_at: new Date().toISOString(),
-      };
-      db.alerts.unshift(createdAlert);
-    }
-
-    saveDemoDb(db, true);
+    saveDemoDb(db, false);
   }
 
-  if (createdAlert) {
+  // Evaluar todas las reglas de alertas del periodo y deduplicar
+  const candidateAlerts = evaluateAlertsForReading({
+    allMeterReadings: previousReadings,
+    newReading: savedReading,
+    meter: normMeter,
+    sedeNombre: sede.nombre,
+  });
+
+  const meterExistingAlerts = existingAlerts.filter((a) => a.meter_id === normMeter.id);
+  const persistedAlerts = [];
+
+  for (const cand of candidateAlerts) {
+    const savedAlert = await persistAlertIfNeeded(
+      {
+        ...cand,
+        sede_id: sede.id,
+        meter_id: normMeter.id,
+        reading_id: savedReading.id,
+      },
+      meterExistingAlerts
+    );
+    if (savedAlert) {
+      persistedAlerts.push(savedAlert);
+    }
+  }
+
+  // Marcar lectura como anómala si disparó alerta ámbar o roja
+  const primaryAlert =
+    persistedAlerts.find((a) => a.severidad === 'roja') ||
+    persistedAlerts.find((a) => a.severidad === 'ambar') ||
+    persistedAlerts[0] ||
+    null;
+
+  if (candidateAlerts.length > 0) {
+    const topCand = candidateAlerts[0];
+    if (isSupabaseConfigured) {
+      await supabase
+        .from('readings')
+        .update({
+          es_anomalo: topCand.severidad === 'roja' || topCand.severidad === 'ambar',
+          motivo_anomalia: topCand.causa,
+        })
+        .eq('id', savedReading.id);
+    } else {
+      const db = loadDemoDb();
+      db.readings = db.readings.map((r) =>
+        r.id === savedReading.id
+          ? {
+              ...r,
+              es_anomalo: topCand.severidad === 'roja' || topCand.severidad === 'ambar',
+              motivo_anomalia: topCand.causa,
+            }
+          : r
+      );
+      saveDemoDb(db, true);
+    }
+  } else if (!isSupabaseConfigured) {
+    saveDemoDb(loadDemoDb(), true);
+  }
+
+  if (primaryAlert) {
     triggerNativeAlertNotification({
-      title: `⚠️ ${createdAlert.titulo}`,
-      body: createdAlert.mensaje,
+      title: `⚠️ ${primaryAlert.titulo}`,
+      body: `${primaryAlert.causa} · Acción: ${primaryAlert.accion_sugerida || ''}`,
       url: '/alertas',
-      severity: createdAlert.severidad,
+      severity: primaryAlert.severidad === 'roja' ? 'alta' : 'media',
       sedeId: sede.id,
     }).catch(() => undefined);
   }
 
-  return { reading: savedReading, alert: createdAlert, evaluation: evalResult };
+  return {
+    reading: savedReading,
+    alert: primaryAlert,
+    alerts: persistedAlerts,
+    notices: validation.notices,
+    evaluation: step,
+  };
 }
 
 /**
@@ -424,7 +658,7 @@ export async function markAlertResolved(alertId, userId) {
 }
 
 /**
- * 6. SYSADMIN — CRUD DE SEDES Y MEDIDORES (CON SOPORTE TRIFÁSICO OBIS)
+ * 6. SYSADMIN — CRUD DE SEDES Y MEDIDORES CON CONFIGURACIÓN TARIFARIA COMPLETA
  */
 export async function saveSedeAdmin({
   id = null,
@@ -433,9 +667,10 @@ export async function saveSedeAdmin({
   direccion,
   ciudad,
   activa = true,
-  umbralLuz = 180,
-  umbralAgua = 25,
-  luzTrifasico = false,
+  umbralLuz = null,
+  umbralAgua = null,
+  luzTrifasico = true,
+  tarifaLuz = 'BT3',
 }) {
   const cleanCode = codigo.trim().toUpperCase();
   if (!nombre.trim() || !cleanCode) {
@@ -474,16 +709,20 @@ export async function saveSedeAdmin({
 
     if (error) throw new Error(error.message);
 
-    // Crear medidor de Luz (Monofásico o Trifásico) y Agua
+    const luzCfg = {
+      ...buildDefaultTariffConfig('luz', Boolean(luzTrifasico)),
+      tarifa: luzTrifasico ? tarifaLuz || 'BT3' : 'BT5',
+    };
+
     await saveMeterAdmin({
       sede_id: createdSede.id,
       tipo: 'luz',
       nombre: luzTrifasico ? 'Medidor Trifásico Luz' : 'Medidor Principal Luz',
       numero_serie: `LUZ-${cleanCode}`,
       umbral_diario_max: umbralLuz ? Number(umbralLuz) : null,
-      porcentaje_alerta_promedio: 30,
       es_trifasico: Boolean(luzTrifasico),
       codigos_obis: luzTrifasico ? DEFAULT_TRIFASICO_CODES : null,
+      config_tarifaria: luzCfg,
       activo: true,
     });
 
@@ -493,9 +732,9 @@ export async function saveSedeAdmin({
       nombre: 'Medidor Principal Agua',
       numero_serie: `AGUA-${cleanCode}`,
       umbral_diario_max: umbralAgua ? Number(umbralAgua) : null,
-      porcentaje_alerta_promedio: 30,
       es_trifasico: false,
       codigos_obis: null,
+      config_tarifaria: buildDefaultTariffConfig('agua', false),
       activo: true,
     });
 
@@ -520,10 +759,6 @@ export async function saveSedeAdmin({
     return db.sedes.find((s) => s.id === id);
   }
 
-  if (db.sedes.some((s) => s.codigo.toUpperCase() === cleanCode)) {
-    throw new Error('Ya existe una sede con ese código.');
-  }
-
   const newSede = {
     id: uid('sede'),
     nombre: nombre.trim(),
@@ -543,9 +778,10 @@ export async function saveSedeAdmin({
       numero_serie: `LUZ-${cleanCode}`,
       unidad: 'kWh',
       umbral_diario_max: umbralLuz ? Number(umbralLuz) : null,
-      porcentaje_alerta_promedio: 30,
+      porcentaje_alerta_promedio: 20,
       es_trifasico: Boolean(luzTrifasico),
       codigos_obis: luzTrifasico ? DEFAULT_TRIFASICO_CODES : null,
+      config_tarifaria: buildDefaultTariffConfig('luz', Boolean(luzTrifasico)),
       activo: true,
       created_at: new Date().toISOString(),
     },
@@ -557,9 +793,10 @@ export async function saveSedeAdmin({
       numero_serie: `AGUA-${cleanCode}`,
       unidad: 'm3',
       umbral_diario_max: umbralAgua ? Number(umbralAgua) : null,
-      porcentaje_alerta_promedio: 30,
+      porcentaje_alerta_promedio: 20,
       es_trifasico: false,
       codigos_obis: null,
+      config_tarifaria: buildDefaultTariffConfig('agua', false),
       activo: true,
       created_at: new Date().toISOString(),
     }
@@ -589,10 +826,11 @@ export async function saveMeterAdmin({
   tipo,
   nombre,
   numero_serie,
-  umbral_diario_max,
-  porcentaje_alerta_promedio = 30,
+  umbral_diario_max = null,
+  porcentaje_alerta_promedio = 20,
   es_trifasico = false,
   codigos_obis = null,
+  config_tarifaria = null,
   activo = true,
 }) {
   const unidad = tipo === 'luz' ? 'kWh' : 'm3';
@@ -602,6 +840,12 @@ export async function saveMeterAdmin({
       ? codigos_obis.filter((c) => c.code?.trim())
       : DEFAULT_TRIFASICO_CODES
     : null;
+
+  const cleanCfg = normalizeMeterConfig({
+    tipo,
+    es_trifasico: useTrifasico,
+    config_tarifaria,
+  });
 
   const basePayload = {
     sede_id,
@@ -613,7 +857,9 @@ export async function saveMeterAdmin({
       umbral_diario_max !== '' && umbral_diario_max !== null && umbral_diario_max !== undefined
         ? Number(umbral_diario_max)
         : null,
-    porcentaje_alerta_promedio: Number(porcentaje_alerta_promedio || 30),
+    porcentaje_alerta_promedio: Number(
+      cleanCfg.umbrales?.consumo_ambar_pct ?? porcentaje_alerta_promedio ?? 20
+    ),
     activo,
   };
 
@@ -622,14 +868,20 @@ export async function saveMeterAdmin({
       ...basePayload,
       es_trifasico: useTrifasico,
       codigos_obis: activeObis,
+      config_tarifaria: cleanCfg,
     };
 
     if (id) {
       let { error } = await supabase.from('meters').update(jsonbPayload).eq('id', id);
-      if (error && isMissingColumnError(error)) {
+      if (error && isSchemaFallbackNeeded(error)) {
         const fallback = {
           ...basePayload,
-          numero_serie: encodeMeterSerieFallback(numero_serie, useTrifasico, activeObis),
+          numero_serie: encodeMeterSerieFallback(
+            numero_serie,
+            useTrifasico,
+            activeObis,
+            cleanCfg
+          ),
         };
         const retry = await supabase.from('meters').update(fallback).eq('id', id);
         error = retry.error;
@@ -639,10 +891,15 @@ export async function saveMeterAdmin({
     }
 
     let { error } = await supabase.from('meters').insert(jsonbPayload);
-    if (error && isMissingColumnError(error)) {
+    if (error && isSchemaFallbackNeeded(error)) {
       const fallback = {
         ...basePayload,
-        numero_serie: encodeMeterSerieFallback(numero_serie, useTrifasico, activeObis),
+        numero_serie: encodeMeterSerieFallback(
+          numero_serie,
+          useTrifasico,
+          activeObis,
+          cleanCfg
+        ),
       };
       const retry = await supabase.from('meters').insert(fallback);
       error = retry.error;
@@ -652,7 +909,12 @@ export async function saveMeterAdmin({
   }
 
   const db = loadDemoDb();
-  const fullLocal = { ...basePayload, es_trifasico: useTrifasico, codigos_obis: activeObis };
+  const fullLocal = {
+    ...basePayload,
+    es_trifasico: useTrifasico,
+    codigos_obis: activeObis,
+    config_tarifaria: cleanCfg,
+  };
   if (id) {
     db.meters = db.meters.map((m) => (m.id === id ? { ...m, ...fullLocal } : m));
   } else {
@@ -772,7 +1034,7 @@ export function subscribeToRealtimeChanges({ currentUser, onSync, onRemoteAlert 
         if (payload.eventType === 'INSERT' && payload.new) {
           const alertRow = payload.new;
           if (currentUser.rol === 'sysadmin' || alertRow.sede_id === currentUser.sede_id) {
-            onRemoteAlert?.(alertRow);
+            onRemoteAlert?.(normalizeAlertRow(alertRow));
           }
         }
       })
