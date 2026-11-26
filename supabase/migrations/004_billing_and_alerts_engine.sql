@@ -3,13 +3,21 @@
 -- Ejecuta este script en el SQL Editor de tu proyecto en Supabase
 -- ============================================================================
 
--- 1. Configuración tarifaria y de alertas por medidor
+-- 1. Configuración tarifaria y de alertas por medidor (Luz siempre con 4 campos OBIS)
 ALTER TABLE public.meters
   ADD COLUMN IF NOT EXISTS es_trifasico BOOLEAN NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS codigos_obis JSONB,
   ADD COLUMN IF NOT EXISTS config_tarifaria JSONB;
 
--- 2. Lecturas: conservar valores crudos intactos + cálculos derivados separados
+UPDATE public.meters SET es_trifasico = true WHERE tipo = 'luz';
+
+-- 2. Lecturas: conservar valores crudos intactos (hasta 3 decimales en agua y 2 en luz)
+ALTER TABLE public.readings
+  ALTER COLUMN valor_lectura TYPE NUMERIC(14, 3),
+  ALTER COLUMN lectura_anterior TYPE NUMERIC(14, 3),
+  ALTER COLUMN consumo_total_periodo TYPE NUMERIC(14, 3),
+  ALTER COLUMN consumo_diario TYPE NUMERIC(14, 3);
+
 ALTER TABLE public.readings
   ADD COLUMN IF NOT EXISTS valor_crudo NUMERIC(14, 4),
   ADD COLUMN IF NOT EXISTS lecturas_obis JSONB,

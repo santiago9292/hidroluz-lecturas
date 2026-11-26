@@ -794,31 +794,23 @@ export default function AdminPage() {
             </div>
 
             {!sedeForm.id && (
-              <div className="p-3.5 rounded-2xl bg-sky-50/70 border border-sky-200 space-y-3">
-                <p className="text-xs font-bold text-sky-900">Medidor eléctrico inicial:</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    value={sedeForm.luzTrifasico ? 'trifasico' : 'monofasico'}
-                    onChange={(e) =>
-                      setSedeForm({ ...sedeForm, luzTrifasico: e.target.value === 'trifasico' })
-                    }
-                    className="px-2.5 py-2 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-900"
-                  >
-                    <option value="trifasico">Trifásico (OBIS)</option>
-                    <option value="monofasico">Monofásico</option>
-                  </select>
-                  <select
-                    value={sedeForm.tarifaLuz}
-                    onChange={(e) => setSedeForm({ ...sedeForm, tarifaLuz: e.target.value })}
-                    className="px-2.5 py-2 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-900"
-                  >
-                    {TARIFF_OPTIONS.map((t) => (
-                      <option key={t} value={t}>
-                        Tarifa {t}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div className="p-3.5 rounded-2xl bg-sky-50/70 border border-sky-200 space-y-2">
+                <p className="text-xs font-bold text-sky-900">
+                  Opción tarifaria inicial del medidor de Luz (4 campos OBIS):
+                </p>
+                <select
+                  value={sedeForm.tarifaLuz}
+                  onChange={(e) =>
+                    setSedeForm({ ...sedeForm, luzTrifasico: true, tarifaLuz: e.target.value })
+                  }
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-900"
+                >
+                  {TARIFF_OPTIONS.map((t) => (
+                    <option key={t} value={t}>
+                      Tarifa {t}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
 
@@ -921,26 +913,9 @@ export default function AdminPage() {
                   <span className="text-xs font-extrabold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
                     <Cpu className="w-4 h-4" /> 1. Parámetros Eléctricos y Recibo
                   </span>
-                  <div className="inline-flex rounded-xl bg-white border border-slate-200 p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setMeterForm({ ...meterForm, es_trifasico: false })}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer ${
-                        !meterForm.es_trifasico ? 'bg-slate-800 text-white' : 'text-slate-600'
-                      }`}
-                    >
-                      Monofásico
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMeterForm({ ...meterForm, es_trifasico: true })}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer ${
-                        meterForm.es_trifasico ? 'bg-indigo-600 text-white' : 'text-slate-600'
-                      }`}
-                    >
-                      Trifásico (OBIS)
-                    </button>
-                  </div>
+                  <span className="px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 text-[11px] font-bold">
+                    Formato fijo: 4 campos OBIS (2 decimales)
+                  </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

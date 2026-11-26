@@ -6,7 +6,13 @@ import {
   evaluateAlertsForReading,
   validateReadingBeforeSave,
 } from '../billingEngine';
-import { buildDefaultTariffConfig } from '../obis';
+import {
+  buildDefaultTariffConfig,
+  formatAguaNumber,
+  formatLuzNumber,
+  normalizeMeterObis,
+  sanitizeDecimalInput,
+} from '../obis';
 
 function createTestTrifasicoMeter(overrides = {}) {
   const baseCfg = {
@@ -374,5 +380,42 @@ describe('Motor de Cálculo Tarifario, Validaciones y Alertas (billingEngine)', 
       decideAlertPersistence({ ...alertHP, severidad: 'roja', valor_detectado: 75 }, existing)
         .action
     ).toBe('update');
+  });
+
+  it('6. Formato fijo: Luz siempre con 4 campos (2 decimales con cero) y Agua a 3 decimales exactos', () => {
+    // Luz siempre normaliza a es_trifasico = true con sus 4 campos OBIS aunque venga sin flag de BD
+    const legacyLuz = normalizeMeterObis({
+      id: 'm-legacy',
+      sede_id: 's1',
+      tipo: 'luz',
+      nombre: 'Medidor Principal Luz',
+      unidad: 'kWh',
+    });
+    expect(legacyLuz.es_trifasico).toBe(true);
+    expect(legacyLuz.codigos_obis).toHaveLength(4);
+
+    // Autocompletado de ceros en Luz (hasta 2 decimales)
+    expect(sanitizeDecimalInput('183,459', 2)).toBe('183.45');
+    expect(formatLuzNumber('183.4')).toBe('183.40');
+    expect(formatLuzNumber('23.9')).toBe('23.90');
+    expect(formatLuzNumber('31')).toBe('31.00');
+
+    // Precisión de 3 decimales en Agua (ej. 47.521 m3)
+    expect(sanitizeDecimalInput('47.5219', 3)).toBe('47.521');
+    expect(formatAguaNumber('47.521')).toBe('47.521');
+    expect(formatAguaNumber('47.5')).toBe('47.500');
+
+    const waterStep = calculateReadingStep({
+      valorCrudo: 47.521,
+      fechaLectura: '2026-11-26T08:00:00Z',
+      meter: { id: 'w1', tipo: 'agua', unidad: 'm3', es_trifasico: false },
+      previousReading: {
+        id: 'w0',
+        valor_crudo: 47.0,
+        fecha_lectura: '2026-11-25T08:00:00Z',
+      },
+    });
+    expect(waterStep.valorCrudoPrimario).toBe(47.521);
+    expect(waterStep.consumoTotal).toBe(0.521);
   });
 });

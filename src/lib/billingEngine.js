@@ -5,6 +5,10 @@ function round2(n) {
   return Number(Number(n || 0).toFixed(2));
 }
 
+function round3(n) {
+  return Number(Number(n || 0).toFixed(3));
+}
+
 function round4(n) {
   return Number(Number(n || 0).toFixed(4));
 }
@@ -253,8 +257,9 @@ export function calculateReadingStep({
     };
   }
 
-  // CASO 2: MONOFÁSICO LUZ O AGUA (m³)
-  const rawCurrNum = Number(valorCrudo ?? 0);
+  // CASO 2: MONOFÁSICO LUZ O AGUA (m³ con hasta 3 decimales exactos)
+  const roundFn = isLuz ? round2 : round3;
+  const rawCurrNum = roundFn(Number(valorCrudo ?? 0));
   const rawPrevNum =
     prevNorm && prevNorm.valor_crudo !== null && prevNorm.valor_crudo !== undefined
       ? Number(prevNorm.valor_crudo)
@@ -264,10 +269,10 @@ export function calculateReadingStep({
 
   const deltaScaled =
     rawPrevNum !== null ? calcRegisterDelta(rawCurrNum, rawPrevNum, factorE, confirmation) : 0;
-  const consumoTotal = round2(deltaScaled ?? 0);
+  const consumoTotal = roundFn(deltaScaled ?? 0);
   const promedioDiario =
     horasTranscurridas && horasTranscurridas > 0
-      ? round2((consumoTotal / horasTranscurridas) * 24)
+      ? roundFn((consumoTotal / horasTranscurridas) * 24)
       : 0;
 
   return {
@@ -695,20 +700,21 @@ export function computePeriodAndTariffSummary({
   const finalizedPeriods = Array.from(periodsMap.values())
     .sort((a, b) => a.start.getTime() - b.start.getTime())
     .map((p) => {
-      const kWhTotal = round2(p.kWhTotal);
+      const pRound = isLuz ? round2 : round3;
+      const kWhTotal = pRound(p.kWhTotal);
       const kWhHP = isTrifasico && cfg.hp_registro !== 'sin_asignar' ? round2(p.kWhHP) : null;
       const kWhHFP = isTrifasico && cfg.hp_registro !== 'sin_asignar' ? round2(p.kWhHFP) : null;
       const kVARhTotal = round2(p.kVARhTotal);
 
       const promedioDiarioPeriodo =
-        p.horasMedidas > 0 ? round2((kWhTotal / p.horasMedidas) * 24) : 0;
+        p.horasMedidas > 0 ? pRound((kWhTotal / p.horasMedidas) * 24) : 0;
 
       const remainingHours =
         p.lastReadingAt && p.end > p.lastReadingAt
           ? (p.end.getTime() - p.lastReadingAt.getTime()) / 3600000
           : 0;
 
-      const proyeccionCorte = round2(kWhTotal + promedioDiarioPeriodo * (remainingHours / 24));
+      const proyeccionCorte = pRound(kWhTotal + promedioDiarioPeriodo * (remainingHours / 24));
 
       // Horas HP del tramo efectivamente medido dentro del periodo y del ciclo completo
       const spanStart = p.prevBeforePeriodAt

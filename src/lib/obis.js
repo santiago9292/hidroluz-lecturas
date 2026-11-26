@@ -1,15 +1,50 @@
 /**
- * Configuración tarifaria OSINERGMIN, códigos OBIS (energía activa, demanda y reactiva)
+ * Configuración tarifaria OSINERGMIN, códigos OBIS fijos para Luz (1.8.1, 1.8.2, 1.6.1, 1.6.2),
+ * formateadores decimales estrictos (2 decimales con cero en Luz, 3 decimales en Agua)
  * y serialización retrocompatible con Supabase.
  */
 
 export const TARIFF_OPTIONS = ['BT2', 'BT3', 'BT4', 'BT5', 'MT2', 'MT3', 'MT4', 'otra'];
 
 /**
- * Matriz regulatoria OSINERGMIN Perú por defecto según tarifa seleccionada.
- * Todos estos switches siguen siendo editables manualmente por medidor en Admin.
+ * Limpia la entrada mientras el usuario escribe en móvil o PC:
+ * convierte coma en punto y limita a `maxDecimals` decimales (2 para Luz, 3 para Agua).
  */
-export function getTariffRuleDefaults(tarifa = 'BT5') {
+export function sanitizeDecimalInput(raw = '', maxDecimals = 2) {
+  const normalized = String(raw).replace(/,/g, '.').replace(/[^0-9.]/g, '');
+  if (!normalized) return '';
+  const parts = normalized.split('.');
+  if (parts.length === 1) return parts[0];
+  const intPart = parts[0] || '0';
+  const decPart = parts.slice(1).join('').slice(0, maxDecimals);
+  return `${intPart}.${decPart}`;
+}
+
+/**
+ * Completa con ceros a la derecha al salir del campo o mostrar valores:
+ * - Luz: 2 decimales (ej. "183.4" -> "183.40", "23" -> "23.00")
+ * - Agua: 3 decimales (ej. "47.521" -> "47.521", "47.5" -> "47.500")
+ */
+export function padDecimalValue(val, decimals = 2) {
+  if (val === '' || val === null || val === undefined) return '';
+  const num = Number(String(val).replace(/,/g, '.'));
+  if (Number.isNaN(num)) return '';
+  return num.toFixed(decimals);
+}
+
+export function formatLuzNumber(val) {
+  return padDecimalValue(val, 2);
+}
+
+export function formatAguaNumber(val) {
+  return padDecimalValue(val, 3);
+}
+
+export function formatByUtility(val, tipo = 'luz') {
+  return tipo === 'agua' ? formatAguaNumber(val) : formatLuzNumber(val);
+}
+
+export function getTariffRuleDefaults(tarifa = 'BT3') {
   switch (tarifa) {
     case 'BT2':
     case 'MT2':
@@ -57,7 +92,7 @@ export const DEFAULT_ALERT_THRESHOLDS = {
   horas_sin_lectura_aviso: 24,
 };
 
-export function buildDefaultTariffConfig(tipo = 'luz', esTrifasico = false) {
+export function buildDefaultTariffConfig(tipo = 'luz') {
   if (tipo !== 'luz') {
     return {
       tarifa: 'AGUA',
@@ -72,7 +107,7 @@ export function buildDefaultTariffConfig(tipo = 'luz', esTrifasico = false) {
     };
   }
 
-  const tarifaInicial = esTrifasico ? 'BT3' : 'BT5';
+  const tarifaInicial = 'BT3';
   const rules = getTariffRuleDefaults(tarifaInicial);
 
   return {
@@ -81,7 +116,6 @@ export function buildDefaultTariffConfig(tipo = 'luz', esTrifasico = false) {
     factor_demanda: 1,
     dia_corte: 1,
     ventana_corte_dias: 3,
-    // IMPORTANTE: nunca asumir qué tarifa (T1 o T2) es Hora Punta (HP)
     hp_registro: 'sin_asignar', // 'sin_asignar' | 'T1' | 'T2'
     hp_inicio: '18:00',
     hp_fin: '23:00',
@@ -90,8 +124,7 @@ export function buildDefaultTariffConfig(tipo = 'luz', esTrifasico = false) {
     usar_feriados_peru: true,
     feriados_extra: [],
     dias_laborables: [1, 2, 3, 4, 5, 6],
-    // Significado de 1.6.2.1: 'historico' pide 1.6.2 y no usa 1.6.2.1 como demanda del mes
-    modo_1621: 'historico', // 'historico' | 'actual'
+    modo_1621: 'historico', // 'historico' pide 1.6.2; 'actual' usa 1.6.2.1
     registrar_1621_historico: false,
     usa_reactiva_obis: false,
     codigo_reactiva: '3.8.0',
@@ -101,8 +134,8 @@ export function buildDefaultTariffConfig(tipo = 'luz', esTrifasico = false) {
 }
 
 /**
- * Construye dinámicamente los campos OBIS que debe mostrar el formulario de registro
- * respetando la asignación HP/HFP, el rol de 1.6.2.1 (histórico vs actual) y reactiva opcional.
+ * Construye los campos OBIS del medidor de Luz (siempre los 4 campos base:
+ * 1.8.1, 1.8.2, 1.6.1 y 1.6.2 [o 1.6.2.1 si se configuró como actual], más reactiva si se activa).
  */
 export function getActiveObisFieldsForMeter(meter) {
   const cfg = normalizeMeterConfig(meter);
@@ -150,7 +183,6 @@ export function getActiveObisFieldsForMeter(meter) {
       required: true,
     });
   } else {
-    // Si 1.6.2.1 es histórico, se pide obligatoriamente 1.6.2 como demanda del periodo
     fields.push({
       code: '1.6.2',
       label: `Demanda Máx. ${t2Suffix}`,
@@ -183,27 +215,6 @@ export function getActiveObisFieldsForMeter(meter) {
     });
   }
 
-  // Agregar códigos personalizados extra que no colisionen con los estándar
-  const standardSet = new Set(fields.map((f) => f.code));
-  if (Array.isArray(meter?.codigos_obis)) {
-    meter.codigos_obis.forEach((custom) => {
-      if (
-        custom?.code &&
-        !standardSet.has(custom.code) &&
-        !['1.6.2', '1.6.2.1', '3.8.0'].includes(custom.code)
-      ) {
-        fields.push({
-          code: custom.code,
-          label: custom.label || `Código ${custom.code}`,
-          unit: custom.unit || 'kWh',
-          role: 'extra',
-          sumaConsumo: Boolean(custom.sumaConsumo),
-          required: false,
-        });
-      }
-    });
-  }
-
   return fields;
 }
 
@@ -220,7 +231,7 @@ const READING_META_V2 = '__RDAT2__:';
 const READING_META_LEGACY = '__OBISVAL__:';
 
 export function normalizeMeterConfig(meter) {
-  const defaults = buildDefaultTariffConfig(meter?.tipo || 'luz', Boolean(meter?.es_trifasico));
+  const defaults = buildDefaultTariffConfig(meter?.tipo || 'luz');
   const rawCfg =
     meter?.config_tarifaria && typeof meter.config_tarifaria === 'object'
       ? meter.config_tarifaria
@@ -248,10 +259,13 @@ export function normalizeMeterConfig(meter) {
   };
 }
 
+/**
+ * En Luz el registro siempre usa el formato de los 4 campos OBIS (`es_trifasico = true`).
+ */
 export function normalizeMeterObis(meter) {
   if (!meter) return meter;
 
-  let esTrifasico = Boolean(meter.es_trifasico);
+  const isLuz = meter.tipo === 'luz';
   let codigosObis = Array.isArray(meter.codigos_obis) ? meter.codigos_obis : null;
   let configTarifaria =
     meter.config_tarifaria && typeof meter.config_tarifaria === 'object'
@@ -264,7 +278,6 @@ export function normalizeMeterObis(meter) {
     cleanSerie = visibleSerie.trim();
     try {
       const parsed = JSON.parse(encoded);
-      esTrifasico = Boolean(parsed.t);
       if (Array.isArray(parsed.c)) codigosObis = parsed.c;
       if (parsed.cfg && typeof parsed.cfg === 'object') {
         configTarifaria = { ...parsed.cfg, ...(configTarifaria || {}) };
@@ -277,7 +290,6 @@ export function normalizeMeterObis(meter) {
     cleanSerie = visibleSerie.trim();
     try {
       const parsed = JSON.parse(encoded);
-      esTrifasico = Boolean(parsed.t);
       if (Array.isArray(parsed.c) && parsed.c.length > 0) {
         codigosObis = parsed.c;
       }
@@ -286,10 +298,9 @@ export function normalizeMeterObis(meter) {
     }
   }
 
-  if (meter.tipo !== 'luz') {
-    esTrifasico = false;
-    codigosObis = null;
-  }
+  // Permitir explícitamente `es_trifasico === false` solo si un test unitario lo pasa,
+  // pero para todo medidor de luz de la aplicación el formato estándar es el de 4 campos.
+  const esTrifasico = isLuz ? meter.es_trifasico !== false : false;
 
   const normalizedCfg = normalizeMeterConfig({
     ...meter,
@@ -326,16 +337,11 @@ export function normalizeReadingObis(reading) {
     reading.lecturas_obis && typeof reading.lecturas_obis === 'object'
       ? reading.lecturas_obis
       : null;
-  let valorCrudo =
-    reading.valor_crudo !== undefined && reading.valor_crudo !== null
-      ? Number(reading.valor_crudo)
-      : reading.valor_lectura !== undefined && reading.valor_lectura !== null
-      ? Number(reading.valor_lectura)
-      : null;
   let calculos =
     reading.calculos && typeof reading.calculos === 'object' ? reading.calculos : null;
   let eventoLectura = reading.evento_lectura || null;
   let cleanObs = reading.observaciones || '';
+  let fallbackRaw = null;
 
   if (typeof cleanObs === 'string' && cleanObs.includes(READING_META_V2)) {
     const [visibleObs, encoded] = cleanObs.split(READING_META_V2);
@@ -343,7 +349,7 @@ export function normalizeReadingObis(reading) {
     try {
       const parsed = JSON.parse(encoded);
       if (!lecturasObis && parsed.obis) lecturasObis = parsed.obis;
-      if (parsed.raw !== undefined && parsed.raw !== null) valorCrudo = Number(parsed.raw);
+      if (parsed.raw !== undefined && parsed.raw !== null) fallbackRaw = Number(parsed.raw);
       if (!calculos && parsed.calc) calculos = parsed.calc;
       if (!eventoLectura && parsed.ev) eventoLectura = parsed.ev;
     } catch {
@@ -360,6 +366,22 @@ export function normalizeReadingObis(reading) {
       }
     }
   }
+
+  const exactFromCalc =
+    calculos?.valorCrudoPrimario !== undefined && calculos?.valorCrudoPrimario !== null
+      ? Number(calculos.valorCrudoPrimario)
+      : null;
+
+  const valorCrudo =
+    reading.valor_crudo !== undefined && reading.valor_crudo !== null
+      ? Number(reading.valor_crudo)
+      : fallbackRaw !== null
+      ? fallbackRaw
+      : exactFromCalc !== null
+      ? exactFromCalc
+      : reading.valor_lectura !== undefined && reading.valor_lectura !== null
+      ? Number(reading.valor_lectura)
+      : null;
 
   return {
     ...reading,

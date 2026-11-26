@@ -1,10 +1,15 @@
 import { X, ExternalLink } from 'lucide-react';
+import { formatAguaNumber, formatLuzNumber } from '@/lib/obis';
 
 export default function MediaModal({ item, onClose }) {
   if (!item || !item.media_url) return null;
 
   const isVideo = item.media_tipo === 'video';
+  const isLuz = item.tipo === 'luz';
   const obisEntries = item.lecturas_obis ? Object.entries(item.lecturas_obis) : [];
+  const rawDisplay = isLuz
+    ? formatLuzNumber(item.calculos?.consumoTotal ?? item.consumo_total_periodo ?? item.valor_lectura)
+    : formatAguaNumber(item.valor_crudo ?? item.valor_lectura);
 
   return (
     <div
@@ -18,7 +23,7 @@ export default function MediaModal({ item, onClose }) {
         <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-slate-200 flex items-center justify-between gap-3">
           <div>
             <h3 className="font-bold text-slate-900 text-sm sm:text-base">
-              Evidencia: {item.valor_lectura} {item.tipo === 'luz' ? 'kWh' : 'm³'}
+              Evidencia: {isLuz ? `Δ ${rawDisplay} kWh` : `${rawDisplay} m³`}
             </h3>
             <p className="text-xs text-slate-500">
               {item.usuario_nombre} (DNI {item.usuario_dni}) ·{' '}
@@ -51,7 +56,7 @@ export default function MediaModal({ item, onClose }) {
                 key={code}
                 className="px-2 py-0.5 rounded-lg bg-white border border-amber-200 text-[11px] font-mono font-bold text-slate-800"
               >
-                Cód {code}: {val}
+                {code}: {formatLuzNumber(val)}
               </span>
             ))}
           </div>

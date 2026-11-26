@@ -24,7 +24,14 @@ import {
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { evaluateReadingConsumption } from '@/lib/consumption';
-import { getActiveObisFieldsForMeter, normalizeMeterConfig } from '@/lib/obis';
+import {
+  formatAguaNumber,
+  formatLuzNumber,
+  getActiveObisFieldsForMeter,
+  normalizeMeterConfig,
+  padDecimalValue,
+  sanitizeDecimalInput,
+} from '@/lib/obis';
 import { registerMeterReading } from '@/lib/dataService';
 import MediaModal from '@/components/MediaModal';
 
@@ -56,7 +63,6 @@ export default function RegistroPage() {
   const [mediaFile, setMediaFile] = useState(null);
   const [mediaPreviewUrl, setMediaPreviewUrl] = useState(null);
 
-  // Confirmaciones requeridas por las validaciones pre-guardado
   const [confirmation, setConfirmation] = useState({
     motivoEnergiaMenor: '',
     topeMedidor: '',
@@ -114,10 +120,11 @@ export default function RegistroPage() {
     [activeMeter]
   );
 
-  const isTrifasico = Boolean(activeMeter?.es_trifasico && activeMeter?.tipo === 'luz');
+  // En Luz siempre se muestran los 4 campos OBIS (2 decimales con autocompletado de cero)
+  const isLuz4Campos = Boolean(activeMeter?.tipo === 'luz');
   const obisFields = useMemo(
-    () => (isTrifasico && activeMeter ? getActiveObisFieldsForMeter(activeMeter) : []),
-    [isTrifasico, activeMeter]
+    () => (isLuz4Campos && activeMeter ? getActiveObisFieldsForMeter(activeMeter) : []),
+    [isLuz4Campos, activeMeter]
   );
 
   useEffect(() => {
@@ -129,7 +136,7 @@ export default function RegistroPage() {
       confirmarBajaDemandaMitad: false,
       confirmarSalto: false,
     });
-  }, [selectedMeterId, isTrifasico]);
+  }, [selectedMeterId, isLuz4Campos]);
 
   const meterReadingsHistory = useMemo(
     () =>
@@ -143,7 +150,7 @@ export default function RegistroPage() {
   const lastObis = lastReading?.lecturas_obis || null;
 
   const requiredObisFilled = useMemo(() => {
-    if (!isTrifasico) return false;
+    if (!isLuz4Campos) return false;
     return obisFields
       .filter((f) => f.required !== false)
       .every(
@@ -152,22 +159,21 @@ export default function RegistroPage() {
           obisValues[c.code] !== '' &&
           !Number.isNaN(Number(obisValues[c.code]))
       );
-  }, [isTrifasico, obisFields, obisValues]);
+  }, [isLuz4Campos, obisFields, obisValues]);
 
   const effectiveTimestamp = useMemo(
     () => (customDateTime ? new Date(customDateTime).toISOString() : new Date().toISOString()),
     [customDateTime]
   );
 
-  // Evaluación y validación pre-guardado en tiempo real
   const liveEval = useMemo(() => {
     if (!activeMeter) return null;
-    if (isTrifasico && !requiredObisFilled) return null;
-    if (!isTrifasico && (valorLectura === '' || Number.isNaN(Number(valorLectura)))) return null;
+    if (isLuz4Campos && !requiredObisFilled) return null;
+    if (!isLuz4Campos && (valorLectura === '' || Number.isNaN(Number(valorLectura)))) return null;
 
     return evaluateReadingConsumption({
-      valorLectura: isTrifasico ? 0 : Number(valorLectura),
-      obisValues: isTrifasico ? obisValues : null,
+      valorLectura: isLuz4Campos ? 0 : Number(valorLectura),
+      obisValues: isLuz4Campos ? obisValues : null,
       fechaLectura: effectiveTimestamp,
       meter: activeMeter,
       previousReadings: meterReadingsHistory,
@@ -176,7 +182,7 @@ export default function RegistroPage() {
     });
   }, [
     activeMeter,
-    isTrifasico,
+    isLuz4Campos,
     requiredObisFilled,
     obisValues,
     valorLectura,
@@ -207,9 +213,27 @@ export default function RegistroPage() {
     if (galleryInputRef.current) galleryInputRef.current.value = '';
   };
 
-  const handleObisKeyDown = (e, idx) => {
+  // Completa con ceros al cambiar de campo o pulsar Enter
+  const handleObisBlur = (code) => {
+    setObisValues((prev) => {
+      const current = prev[code];
+      if (current === undefined || current === '') return prev;
+      return {
+        ...prev,
+        [code]: padDecimalValue(current, 2),
+      };
+    });
+  };
+
+  const handleAguaBlur = () => {
+    if (valorLectura === '') return;
+    setValorLectura(padDecimalValue(valorLectura, 3));
+  };
+
+  const handleObisKeyDown = (e, idx, code) => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      handleObisBlur(code);
       const nextInput = obisInputRefs.current[idx + 1];
       if (nextInput) nextInput.focus();
     }
@@ -221,6 +245,24 @@ export default function RegistroPage() {
       showToast('Selecciona una sede y medidor válidos.', 'error');
       return;
     }
+
+    // Normalizar/completar con ceros todos los campos antes de guardar
+    let formattedObis = null;
+    let formattedSingle = valorLectura;
+
+    if (isLuz4Campos) {
+      formattedObis = {};
+      Object.entries(obisValues).forEach(([k, v]) => {
+        if (v !== '' && v !== undefined && v !== null) {
+          formattedObis[k] = padDecimalValue(v, 2);
+        }
+      });
+      setObisValues(formattedObis);
+    } else if (valorLectura !== '') {
+      formattedSingle = padDecimalValue(valorLectura, 3);
+      setValorLectura(formattedSingle);
+    }
+
     if (liveEval && !liveEval.valid) {
       showToast(
         liveEval.blockingIssues[0]?.message || 'Completa las confirmaciones requeridas.',
@@ -236,8 +278,8 @@ export default function RegistroPage() {
         currentUser,
         sede: activeSede,
         meter: activeMeter,
-        valorLectura: isTrifasico ? 0 : Number(valorLectura),
-        obisValues: isTrifasico ? obisValues : null,
+        valorLectura: isLuz4Campos ? 0 : Number(formattedSingle),
+        obisValues: isLuz4Campos ? formattedObis : null,
         fechaLectura: customDateTime ? new Date(customDateTime).toISOString() : undefined,
         observaciones,
         file: mediaFile,
@@ -262,9 +304,13 @@ export default function RegistroPage() {
       if (alert) {
         showToast(`⚠️ Lectura guardada con alerta: ${alert.titulo}`, 'warning', 6500);
       } else if (notices?.some((n) => n.type === 'reinicio_demanda_corte')) {
-        showToast('Lectura guardada: reinicio normal de demanda detectado (nuevo periodo).', 'success', 4500);
+        showToast(
+          'Lectura guardada: reinicio normal de demanda detectado (nuevo periodo).',
+          'success',
+          4500
+        );
       } else {
-        showToast('Lectura cruda y cálculos guardados correctamente.', 'success', 3000);
+        showToast('Lectura guardada correctamente.', 'success', 3000);
       }
     } catch (err) {
       showToast(err.message || 'Error al registrar lectura.', 'error', 5500);
@@ -281,7 +327,7 @@ export default function RegistroPage() {
   const canSubmit =
     Boolean(activeMeter) &&
     !saving &&
-    (isTrifasico ? requiredObisFilled : valorLectura !== '') &&
+    (isLuz4Campos ? requiredObisFilled : valorLectura !== '') &&
     Boolean(liveEval?.valid);
 
   const renderRecentList = () => {
@@ -298,6 +344,7 @@ export default function RegistroPage() {
         {sedeRecentReadings.map((item) => {
           const isLuz = item.tipo === 'luz';
           const unit = isLuz ? 'kWh' : 'm³';
+          const fmt = isLuz ? formatLuzNumber : formatAguaNumber;
           const obisEntries = item.lecturas_obis ? Object.entries(item.lecturas_obis) : [];
           const calc = item.calculos || null;
 
@@ -322,11 +369,11 @@ export default function RegistroPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-mono font-bold text-sm text-slate-900">
-                        Δ {calc?.consumoTotal ?? item.consumo_total_periodo} {unit}
+                        Δ {fmt(calc?.consumoTotal ?? item.consumo_total_periodo ?? 0)} {unit}
                       </span>
-                      {obisEntries.length === 0 && (
+                      {!isLuz && (
                         <span className="text-[11px] font-mono text-slate-500">
-                          (Crudo: {item.valor_crudo ?? item.valor_lectura})
+                          (Medidor: {formatAguaNumber(item.valor_crudo ?? item.valor_lectura)})
                         </span>
                       )}
                       {item.evento_lectura && (
@@ -350,7 +397,7 @@ export default function RegistroPage() {
                 <div className="text-right shrink-0">
                   <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-emerald-700">
                     <TrendingUp className="w-3 h-3" />
-                    {calc?.promedioDiario ?? item.consumo_diario} {unit}/d
+                    {fmt(calc?.promedioDiario ?? item.consumo_diario ?? 0)} {unit}/d
                   </span>
                   {item.media_url && (
                     <button
@@ -376,7 +423,7 @@ export default function RegistroPage() {
                       key={code}
                       className="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[10px] font-mono text-slate-700"
                     >
-                      <strong>{code}:</strong> {val}
+                      <strong>{code}:</strong> {formatLuzNumber(val)}
                     </span>
                   ))}
                 </div>
@@ -403,7 +450,7 @@ export default function RegistroPage() {
             Registrar Lectura
           </h2>
           <p className="hidden sm:block text-sm text-slate-500">
-            Guarda el valor crudo exacto del medidor; el sistema aplica factores, cortes y alertas.
+            Luz en 4 campos (2 decimales con autocompletado) y Agua en m³ (3 decimales).
           </p>
         </div>
 
@@ -491,13 +538,13 @@ export default function RegistroPage() {
                       : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
-                  {m.nombre} {m.es_trifasico ? '(3F)' : ''}
+                  {m.nombre}
                 </button>
               ))}
             </div>
           )}
 
-          {/* Barra informativa de medidor, tarifa, factor y corte */}
+          {/* Barra informativa */}
           {activeMeter && meterCfg ? (
             <div className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-x-2.5 gap-y-1 text-[11px]">
               <div className="flex items-center gap-1.5 flex-wrap">
@@ -506,7 +553,7 @@ export default function RegistroPage() {
                     {meterCfg.tarifa}
                   </span>
                 )}
-                {isTrifasico && (
+                {isLuz4Campos && (
                   <span
                     className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold ${
                       meterCfg.hp_registro === 'sin_asignar'
@@ -539,25 +586,21 @@ export default function RegistroPage() {
             </div>
           )}
 
-          {/* CAMPOS CRUDOS DEL MEDIDOR */}
-          {activeMeter && isTrifasico ? (
+          {/* CAMPOS DE REGISTRO: 4 CAMPOS EN LUZ (0.00) Y 1 CAMPO EN AGUA (0.000) */}
+          {activeMeter && isLuz4Campos ? (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
                   Valores Crudos en Pantalla del Medidor
                 </label>
-                {lastObis && (
-                  <span className="text-[10px] text-slate-400">
-                    Toca &ldquo;Ant&rdquo; si un registro no cambió
-                  </span>
-                )}
+                <span className="text-[10px] font-mono text-slate-400">Formato 0.00</span>
               </div>
 
               <div className="grid grid-cols-2 gap-2.5">
                 {obisFields.map((cfgField, idx) => {
                   const prevVal =
                     lastObis && lastObis[cfgField.code] !== undefined
-                      ? lastObis[cfgField.code]
+                      ? formatLuzNumber(lastObis[cfgField.code])
                       : null;
                   const isEnergy = cfgField.sumaConsumo;
 
@@ -598,7 +641,7 @@ export default function RegistroPage() {
                             onClick={() =>
                               setObisValues((prev) => ({
                                 ...prev,
-                                [cfgField.code]: String(prevVal),
+                                [cfgField.code]: prevVal,
                               }))
                             }
                             className="text-[10px] font-mono font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 px-1.5 py-0.2 rounded cursor-pointer shrink-0"
@@ -612,18 +655,18 @@ export default function RegistroPage() {
                         ref={(el) => {
                           obisInputRefs.current[idx] = el;
                         }}
-                        type="number"
-                        step="0.0001"
-                        min="0"
+                        type="text"
                         inputMode="decimal"
+                        autoComplete="off"
                         enterKeyHint={idx < obisFields.length - 1 ? 'next' : 'done'}
-                        onKeyDown={(e) => handleObisKeyDown(e, idx)}
-                        placeholder={prevVal !== null ? `${prevVal}` : '0'}
+                        onKeyDown={(e) => handleObisKeyDown(e, idx, cfgField.code)}
+                        onBlur={() => handleObisBlur(cfgField.code)}
+                        placeholder={prevVal !== null ? prevVal : '0.00'}
                         value={obisValues[cfgField.code] ?? ''}
                         onChange={(e) =>
                           setObisValues((prev) => ({
                             ...prev,
-                            [cfgField.code]: e.target.value,
+                            [cfgField.code]: sanitizeDecimalInput(e.target.value, 2),
                           }))
                         }
                         className="w-full px-2.5 py-2 rounded-xl bg-white border border-slate-300 focus:border-sky-500 outline-none text-base sm:text-lg font-mono font-extrabold text-slate-900 placeholder:text-slate-300"
@@ -638,40 +681,47 @@ export default function RegistroPage() {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                    Valor Crudo del Medidor ({activeMeter.unidad})
+                    Valor Crudo del Medidor (m³)
                   </label>
-                  {lastReading && (
-                    <span className="text-[11px] text-slate-500 font-mono">
-                      Anterior: <strong>{lastReading.valor_crudo ?? lastReading.valor_lectura}</strong>{' '}
-                      {activeMeter.unidad}
-                    </span>
-                  )}
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    {lastReading ? (
+                      <>
+                        Ant:{' '}
+                        <strong>
+                          {formatAguaNumber(lastReading.valor_crudo ?? lastReading.valor_lectura)}
+                        </strong>{' '}
+                        m³
+                      </>
+                    ) : (
+                      'Formato 0.000'
+                    )}
+                  </span>
                 </div>
                 <div className="relative">
                   <Gauge className="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
-                    type="number"
-                    step="0.01"
-                    min="0"
+                    type="text"
                     inputMode="decimal"
+                    autoComplete="off"
+                    onBlur={handleAguaBlur}
                     placeholder={
                       lastReading
-                        ? `Anterior: ${lastReading.valor_crudo ?? lastReading.valor_lectura}`
-                        : 'Ej. 14520.50'
+                        ? formatAguaNumber(lastReading.valor_crudo ?? lastReading.valor_lectura)
+                        : 'Ej. 47.521'
                     }
                     value={valorLectura}
-                    onChange={(e) => setValorLectura(e.target.value)}
+                    onChange={(e) => setValorLectura(sanitizeDecimalInput(e.target.value, 3))}
                     className="w-full pl-11 pr-16 py-3 rounded-2xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-sky-500 outline-none text-lg sm:text-xl font-mono font-extrabold text-slate-900 placeholder:text-slate-400"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded-lg bg-slate-200/80 text-xs font-mono font-bold text-slate-700">
-                    {activeMeter.unidad}
+                    m³
                   </span>
                 </div>
               </div>
             )
           )}
 
-          {/* CÁLCULO EN VIVO + AVISOS DE CORTE + BLOQUEOS/CONFIRMACIONES PRE-GUARDADO */}
+          {/* CÁLCULO EN VIVO + VALIDACIONES PRE-GUARDADO */}
           {liveEval && activeMeter && (
             <div className="space-y-2.5">
               {liveEval.step && (
@@ -687,22 +737,33 @@ export default function RegistroPage() {
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-bold flex items-center gap-1.5">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      Consumo Tramo: {liveEval.consumoTotalPeriodo} {activeMeter.unidad}
+                      Consumo Tramo:{' '}
+                      {isLuz4Campos
+                        ? formatLuzNumber(liveEval.consumoTotalPeriodo)
+                        : formatAguaNumber(liveEval.consumoTotalPeriodo)}{' '}
+                      {activeMeter.unidad}
                     </span>
                     <span className="font-mono text-xs sm:text-sm font-extrabold px-2 py-0.5 rounded-lg bg-white border border-black/10">
-                      {liveEval.consumoDiario} {activeMeter.unidad}/día
+                      {isLuz4Campos
+                        ? formatLuzNumber(liveEval.consumoDiario)
+                        : formatAguaNumber(liveEval.consumoDiario)}{' '}
+                      {activeMeter.unidad}/día
                     </span>
                   </div>
 
-                  {isTrifasico && (
+                  {isLuz4Campos && (
                     <p className="text-[11px] mt-1 font-mono opacity-90">
                       {liveEval.consumoHP !== null
-                        ? `HP: ${liveEval.consumoHP} kWh · HFP: ${liveEval.consumoHFP} kWh`
-                        : `ΔT1: ${liveEval.step.consumoT1} · ΔT2: ${liveEval.step.consumoT2} (HP sin asignar)`}
+                        ? `HP: ${formatLuzNumber(liveEval.consumoHP)} kWh · HFP: ${formatLuzNumber(
+                            liveEval.consumoHFP
+                          )} kWh`
+                        : `ΔT1: ${formatLuzNumber(liveEval.step.consumoT1)} · ΔT2: ${formatLuzNumber(
+                            liveEval.step.consumoT2
+                          )} (HP sin asignar)`}
                       {liveEval.demandaMaxLectura !== null &&
-                        ` · Dem. Máx: ${liveEval.demandaMaxLectura} kW`}
+                        ` · Dem. Máx: ${formatLuzNumber(liveEval.demandaMaxLectura)} kW`}
                       {liveEval.consumoReactiva !== null &&
-                        ` · Reactiva: ${liveEval.consumoReactiva} kVARh`}
+                        ` · Reactiva: ${formatLuzNumber(liveEval.consumoReactiva)} kVARh`}
                     </p>
                   )}
 
@@ -714,7 +775,6 @@ export default function RegistroPage() {
                 </div>
               )}
 
-              {/* Avisos informativos (ej. reinicio normal de demanda cerca del corte) */}
               {liveEval.notices?.map((n, i) => (
                 <div
                   key={i}
@@ -725,7 +785,6 @@ export default function RegistroPage() {
                 </div>
               ))}
 
-              {/* VALIDACIONES BLOQUEANTES QUE EXIGEN CONFIRMACIÓN ANTES DE GUARDAR */}
               {liveEval.blockingIssues?.map((issue, idx) => (
                 <div
                   key={idx}
@@ -818,7 +877,6 @@ export default function RegistroPage() {
                 </div>
               ))}
 
-              {/* Previsualización de alertas que se registrarán */}
               {liveEval.valid &&
                 liveEval.triggeredAlerts?.map((al, i) => (
                   <div
@@ -930,7 +988,6 @@ export default function RegistroPage() {
             )}
           </div>
 
-          {/* Fecha/hora opcional y observación */}
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
             <input
               type="text"

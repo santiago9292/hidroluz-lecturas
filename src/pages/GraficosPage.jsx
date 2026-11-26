@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { computePeriodAndTariffSummary } from '@/lib/consumption';
+import { formatAguaNumber, formatLuzNumber } from '@/lib/obis';
 import MediaModal from '@/components/MediaModal';
 
 export default function GraficosPage() {
@@ -56,7 +57,6 @@ export default function GraficosPage() {
   const primaryLuzMeter = luzMeters[0] || null;
   const primaryAguaMeter = aguaMeters[0] || null;
 
-  // Resumen de facturación del periodo comparable con el recibo (Luz y Agua)
   const luzBilling = useMemo(() => {
     if (!primaryLuzMeter) return null;
     const mReadings = readings.filter((r) => r.meter_id === primaryLuzMeter.id);
@@ -85,7 +85,7 @@ export default function GraficosPage() {
           r.sede_id === selectedSedeId &&
           new Date(r.fecha_lectura).getTime() >= cutoff
       )
-      .sort((a, b) => new Date(a.fecha_lectura).getTime() - new Date(b.fecha_lectura).getTime());
+      .sort((a, b) => new Date(a.fecha_lectura).getTime() - new Date(a.fecha_lectura).getTime());
   }, [readings, selectedSedeId, daysFilter]);
 
   const luzChartData = useMemo(
@@ -110,7 +110,6 @@ export default function GraficosPage() {
     [sedeReadings]
   );
 
-  // Exportar Resumen de Periodos (comparable con el recibo eléctrico y de agua)
   const exportPeriodSummaryCsv = () => {
     if (!luzBilling && !aguaBilling) return;
 
@@ -150,22 +149,26 @@ export default function GraficosPage() {
           p.key,
           p.start.toLocaleDateString('es-PE'),
           p.end.toLocaleDateString('es-PE'),
-          p.kWhHP ?? '',
-          p.kWhHFP ?? '',
-          p.kWhTotal,
-          p.promedioDiarioPeriodo,
-          p.proyeccionCorte,
-          p.demandaHPMax ?? '',
-          p.demandaHFPMax ?? '',
-          p.demandaMaximaMes ?? '',
-          isCurr ? luzBilling.currentPeriod.potenciaDistribucionTotal ?? '' : '',
-          isCurr ? luzBilling.currentPeriod.potenciaDistribucionHP ?? '' : '',
+          p.kWhHP !== null ? formatLuzNumber(p.kWhHP) : '',
+          p.kWhHFP !== null ? formatLuzNumber(p.kWhHFP) : '',
+          formatLuzNumber(p.kWhTotal),
+          formatLuzNumber(p.promedioDiarioPeriodo),
+          formatLuzNumber(p.proyeccionCorte),
+          p.demandaHPMax !== null ? formatLuzNumber(p.demandaHPMax) : '',
+          p.demandaHFPMax !== null ? formatLuzNumber(p.demandaHFPMax) : '',
+          p.demandaMaximaMes !== null ? formatLuzNumber(p.demandaMaximaMes) : '',
+          isCurr && luzBilling.currentPeriod.potenciaDistribucionTotal !== null
+            ? formatLuzNumber(luzBilling.currentPeriod.potenciaDistribucionTotal)
+            : '',
+          isCurr && luzBilling.currentPeriod.potenciaDistribucionHP !== null
+            ? formatLuzNumber(luzBilling.currentPeriod.potenciaDistribucionHP)
+            : '',
           p.horasHPPeriodo,
           p.calificacion ?? '',
           p.calificacionTexto ?? '',
-          p.kVARhTotal,
-          p.reactivaPct,
-          p.reactivaExcedente,
+          formatLuzNumber(p.kVARhTotal),
+          formatLuzNumber(p.reactivaPct),
+          formatLuzNumber(p.reactivaExcedente),
         ]);
       });
     }
@@ -181,9 +184,9 @@ export default function GraficosPage() {
           p.end.toLocaleDateString('es-PE'),
           '',
           '',
-          p.kWhTotal,
-          p.promedioDiarioPeriodo,
-          p.proyeccionCorte,
+          formatAguaNumber(p.kWhTotal),
+          formatAguaNumber(p.promedioDiarioPeriodo),
+          formatAguaNumber(p.proyeccionCorte),
           '',
           '',
           '',
@@ -214,7 +217,6 @@ export default function GraficosPage() {
     URL.revokeObjectURL(url);
   };
 
-  // Exportar bitácora cruda + calculada
   const exportRawReadingsCsv = () => {
     const obisKeySet = new Set(['1.8.1', '1.8.2', '1.6.1', '1.6.2', '1.6.2.1', '3.8.0']);
     sedeReadings.forEach((r) => {
@@ -229,7 +231,7 @@ export default function GraficosPage() {
       'Operador',
       'SEDE',
       'Servicio',
-      'Valor Crudo Monofásico/Agua',
+      'Valor Crudo Agua (m3)',
       ...obisColumns.map((k) => `Crudo ${k}`),
       'Horas Transcurridas',
       'Consumo HP (kWh)',
@@ -242,6 +244,8 @@ export default function GraficosPage() {
     ];
 
     const rows = [...sedeReadings].reverse().map((r) => {
+      const isLuz = r.tipo === 'luz';
+      const fmt = isLuz ? formatLuzNumber : formatAguaNumber;
       const obis = r.lecturas_obis || {};
       const c = r.calculos || {};
       return [
@@ -249,14 +253,16 @@ export default function GraficosPage() {
         r.usuario_nombre,
         activeSede?.nombre || '',
         r.tipo.toUpperCase(),
-        obisColumns.some((k) => obis[k] !== undefined) ? '' : r.valor_crudo ?? r.valor_lectura,
-        ...obisColumns.map((k) => (obis[k] !== undefined ? obis[k] : '')),
+        isLuz ? '' : formatAguaNumber(r.valor_crudo ?? r.valor_lectura),
+        ...obisColumns.map((k) => (obis[k] !== undefined ? formatLuzNumber(obis[k]) : '')),
         c.horasTranscurridas ?? '',
-        c.consumoHP ?? '',
-        c.consumoHFP ?? '',
-        c.consumoTotal ?? r.consumo_total_periodo,
-        c.promedioDiario ?? r.consumo_diario,
-        c.demandaMaxLectura ?? '',
+        c.consumoHP !== null && c.consumoHP !== undefined ? formatLuzNumber(c.consumoHP) : '',
+        c.consumoHFP !== null && c.consumoHFP !== undefined ? formatLuzNumber(c.consumoHFP) : '',
+        fmt(c.consumoTotal ?? r.consumo_total_periodo ?? 0),
+        fmt(c.promedioDiario ?? r.consumo_diario ?? 0),
+        c.demandaMaxLectura !== null && c.demandaMaxLectura !== undefined
+          ? formatLuzNumber(c.demandaMaxLectura)
+          : '',
         r.evento_lectura || 'normal',
         r.media_url || '',
       ];
@@ -364,22 +370,22 @@ export default function GraficosPage() {
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
               <span className="text-[11px] font-semibold text-slate-500 block">Energía Total</span>
               <p className="text-lg font-mono font-extrabold text-slate-900 mt-0.5">
-                {cpLuz.kWhTotal} <span className="text-xs font-normal">kWh</span>
+                {formatLuzNumber(cpLuz.kWhTotal)} <span className="text-xs font-normal">kWh</span>
               </p>
               <span className="text-[10px] text-slate-500">
-                Proy. corte: {cpLuz.proyeccionCorte} kWh
+                Proy. corte: {formatLuzNumber(cpLuz.proyeccionCorte)} kWh
               </span>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
-              <span className="text-[11px] font-semibold text-slate-500 block">
-                kWh HP / HFP
-              </span>
+              <span className="text-[11px] font-semibold text-slate-500 block">kWh HP / HFP</span>
               <p className="text-sm font-mono font-extrabold text-slate-900 mt-1">
-                {cpLuz.kWhHP !== null ? `${cpLuz.kWhHP} / ${cpLuz.kWhHFP}` : 'Definir HP/HFP'}
+                {cpLuz.kWhHP !== null
+                  ? `${formatLuzNumber(cpLuz.kWhHP)} / ${formatLuzNumber(cpLuz.kWhHFP)}`
+                  : 'Definir HP/HFP'}
               </p>
               <span className="text-[10px] text-slate-500">
-                Prom: {cpLuz.promedioDiarioPeriodo} kWh/d
+                Prom: {formatLuzNumber(cpLuz.promedioDiarioPeriodo)} kWh/d
               </span>
             </div>
 
@@ -388,10 +394,13 @@ export default function GraficosPage() {
                 Demanda Máx. Mes
               </span>
               <p className="text-lg font-mono font-extrabold text-slate-900 mt-0.5">
-                {cpLuz.demandaMaximaMes !== null ? `${cpLuz.demandaMaximaMes} kW` : '—'}
+                {cpLuz.demandaMaximaMes !== null
+                  ? `${formatLuzNumber(cpLuz.demandaMaximaMes)} kW`
+                  : '—'}
               </p>
               <span className="text-[10px] text-slate-500">
-                HP: {cpLuz.demandaHPMax ?? '—'} · HFP: {cpLuz.demandaHFPMax ?? '—'} kW
+                HP: {cpLuz.demandaHPMax !== null ? formatLuzNumber(cpLuz.demandaHPMax) : '—'} · HFP:{' '}
+                {cpLuz.demandaHFPMax !== null ? formatLuzNumber(cpLuz.demandaHFPMax) : '—'} kW
               </span>
             </div>
 
@@ -401,11 +410,15 @@ export default function GraficosPage() {
               </span>
               <p className="text-lg font-mono font-extrabold text-indigo-700 mt-0.5">
                 {cpLuz.potenciaDistribucionTotal !== null
-                  ? `${cpLuz.potenciaDistribucionTotal} kW`
+                  ? `${formatLuzNumber(cpLuz.potenciaDistribucionTotal)} kW`
                   : 'N/A'}
               </p>
               <span className="text-[10px] text-slate-500">
-                Pot. HP (6m): {cpLuz.potenciaDistribucionHP ?? '—'} kW
+                Pot. HP (6m):{' '}
+                {cpLuz.potenciaDistribucionHP !== null
+                  ? formatLuzNumber(cpLuz.potenciaDistribucionHP)
+                  : '—'}{' '}
+                kW
               </span>
             </div>
 
@@ -424,10 +437,12 @@ export default function GraficosPage() {
                 Reactiva Excedente
               </span>
               <p className="text-lg font-mono font-extrabold text-slate-900 mt-0.5">
-                {cpLuz.reactivaExcedente} <span className="text-xs font-normal">kVARh</span>
+                {formatLuzNumber(cpLuz.reactivaExcedente)}{' '}
+                <span className="text-xs font-normal">kVARh</span>
               </p>
               <span className="text-[10px] text-slate-500">
-                Total: {cpLuz.kVARhTotal} kVARh ({cpLuz.reactivaPct}%)
+                Total: {formatLuzNumber(cpLuz.kVARhTotal)} kVARh ({formatLuzNumber(cpLuz.reactivaPct)}
+                %)
               </span>
             </div>
           </div>
@@ -441,15 +456,20 @@ export default function GraficosPage() {
               </span>
               <div className="flex flex-wrap gap-4 font-mono">
                 <span>
-                  Acumulado: <strong className="text-slate-900">{cpAgua.kWhTotal} m³</strong>
+                  Acumulado:{' '}
+                  <strong className="text-slate-900">{formatAguaNumber(cpAgua.kWhTotal)} m³</strong>
                 </span>
                 <span>
                   Promedio diario:{' '}
-                  <strong className="text-slate-900">{cpAgua.promedioDiarioPeriodo} m³/d</strong>
+                  <strong className="text-slate-900">
+                    {formatAguaNumber(cpAgua.promedioDiarioPeriodo)} m³/d
+                  </strong>
                 </span>
                 <span>
                   Proyección al corte:{' '}
-                  <strong className="text-sky-700">{cpAgua.proyeccionCorte} m³</strong>
+                  <strong className="text-sky-700">
+                    {formatAguaNumber(cpAgua.proyeccionCorte)} m³
+                  </strong>
                 </span>
               </div>
             </div>
@@ -457,7 +477,7 @@ export default function GraficosPage() {
         </div>
       )}
 
-      {/* Controles de rango para curvas */}
+      {/* Controles de rango */}
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider">
           Curvas de Promedio Diario (24h)
@@ -484,7 +504,7 @@ export default function GraficosPage() {
         </div>
       </div>
 
-      {/* Gráficos de Consumo Diario */}
+      {/* Gráficos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs">
           <div className="flex items-center gap-2.5 mb-4">
@@ -495,7 +515,7 @@ export default function GraficosPage() {
               <h3 className="font-bold text-slate-900 text-base">
                 Promedio Diario de Energía (kWh/24h)
               </h3>
-              <p className="text-xs text-slate-500">Normalizado por horas exactas entre lecturas</p>
+              <p className="text-xs text-slate-500">Formato 2 decimales (0.00)</p>
             </div>
           </div>
 
@@ -523,7 +543,7 @@ export default function GraficosPage() {
                       borderRadius: '14px',
                       color: '#0f172a',
                     }}
-                    formatter={(val) => [`${val} kWh/día`, 'Promedio 24h']}
+                    formatter={(val) => [`${formatLuzNumber(val)} kWh/día`, 'Promedio 24h']}
                   />
                   <Area
                     type="monotone"
@@ -548,7 +568,7 @@ export default function GraficosPage() {
               <h3 className="font-bold text-slate-900 text-base">
                 Promedio Diario de Agua (m³/24h)
               </h3>
-              <p className="text-xs text-slate-500">Normalizado por horas exactas entre lecturas</p>
+              <p className="text-xs text-slate-500">Formato 3 decimales (0.000)</p>
             </div>
           </div>
 
@@ -576,7 +596,7 @@ export default function GraficosPage() {
                       borderRadius: '14px',
                       color: '#0f172a',
                     }}
-                    formatter={(val) => [`${val} m³/día`, 'Promedio 24h']}
+                    formatter={(val) => [`${formatAguaNumber(val)} m³/día`, 'Promedio 24h']}
                   />
                   <Area
                     type="monotone"
@@ -593,7 +613,7 @@ export default function GraficosPage() {
         </div>
       </div>
 
-      {/* Bitácora detallada con crudos intactos y cálculos */}
+      {/* Bitácora detallada */}
       <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <h3 className="font-bold text-slate-900 text-base">
@@ -624,7 +644,9 @@ export default function GraficosPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {[...sedeReadings].reverse().slice(0, 30).map((r) => {
-                const unit = r.tipo === 'luz' ? 'kWh' : 'm³';
+                const isLuz = r.tipo === 'luz';
+                const unit = isLuz ? 'kWh' : 'm³';
+                const fmt = isLuz ? formatLuzNumber : formatAguaNumber;
                 const obisEntries = r.lecturas_obis ? Object.entries(r.lecturas_obis) : [];
                 const c = r.calculos || {};
                 return (
@@ -641,12 +663,10 @@ export default function GraficosPage() {
                     <td className="py-3 px-3">
                       <span
                         className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                          r.tipo === 'luz'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-sky-100 text-sky-800'
+                          isLuz ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-800'
                         }`}
                       >
-                        {r.tipo === 'luz' ? 'Luz' : 'Agua'}
+                        {isLuz ? 'Luz' : 'Agua'}
                       </span>
                     </td>
                     <td className="py-3 px-3">
@@ -657,26 +677,26 @@ export default function GraficosPage() {
                               key={code}
                               className="px-1.5 py-0.2 rounded bg-slate-100 border border-slate-200 text-[10px] font-mono text-slate-800"
                             >
-                              {code}: <strong>{val}</strong>
+                              {code}: <strong>{formatLuzNumber(val)}</strong>
                             </span>
                           ))}
                         </div>
                       ) : (
                         <span className="font-mono font-bold text-slate-900">
-                          {r.valor_crudo ?? r.valor_lectura} {unit}
+                          {fmt(r.valor_crudo ?? r.valor_lectura)} {unit}
                         </span>
                       )}
                     </td>
                     <td className="py-3 px-3 font-mono text-xs text-slate-800 whitespace-nowrap">
-                      <strong>{c.consumoTotal ?? r.consumo_total_periodo}</strong> {unit}
-                      {c.consumoHP !== null && c.consumoHP !== undefined && (
+                      <strong>{fmt(c.consumoTotal ?? r.consumo_total_periodo ?? 0)}</strong> {unit}
+                      {isLuz && c.consumoHP !== null && c.consumoHP !== undefined && (
                         <span className="block text-[10px] text-slate-500">
-                          HP:{c.consumoHP} · HFP:{c.consumoHFP}
+                          HP:{formatLuzNumber(c.consumoHP)} · HFP:{formatLuzNumber(c.consumoHFP)}
                         </span>
                       )}
                     </td>
                     <td className="py-3 px-3 font-mono text-slate-700 whitespace-nowrap">
-                      {c.promedioDiario ?? r.consumo_diario} {unit}/d
+                      {fmt(c.promedioDiario ?? r.consumo_diario ?? 0)} {unit}/d
                     </td>
                     <td className="py-3 px-3 text-xs text-slate-500">{r.usuario_nombre}</td>
                     <td className="py-3 pl-3 text-right">

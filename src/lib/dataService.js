@@ -441,13 +441,13 @@ export async function registerMeterReading({
   const isTrifasico = Boolean(normMeter.es_trifasico && normMeter.tipo === 'luz');
   const isoDate = fechaLectura ? new Date(fechaLectura).toISOString() : new Date().toISOString();
 
-  // Limpiar valores OBIS crudos exactamente como fueron digitados
+  // Conservar formato exacto con ceros (ej. "183.40" en Luz) tanto en JSONB como en pantalla
   let rawObisClean = null;
   if (isTrifasico && obisValues) {
     rawObisClean = {};
     Object.entries(obisValues).forEach(([code, val]) => {
       if (val !== '' && val !== null && val !== undefined && !Number.isNaN(Number(val))) {
-        rawObisClean[code] = Number(val);
+        rawObisClean[code] = Number(val).toFixed(2);
       }
     });
   }
